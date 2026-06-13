@@ -28,7 +28,7 @@ export default function DialoguePanel() {
   const showDialogueBubble = useNebulaStore((s) => s.showDialogueBubble);
   const hideDialogueBubble = useNebulaStore((s) => s.hideDialogueBubble);
   const addMemory = useNebulaStore((s) => s.addMemory);
-  const userFriends = useNebulaStore((s) => s.userFriends);
+  const userFriends = useNebulaStore((s) => s.friends);
   const addFriend = useNebulaStore((s) => s.addFriend);
 
   const [showPanel, setShowPanel] = useState(false);
@@ -40,8 +40,8 @@ export default function DialoguePanel() {
   // 获取可对话的朋友列表
   useEffect(() => {
     if (agent) {
-      const friends = userFriends.filter((id) => id !== agent.id);
-      setTargetAgents(friends);
+      const friendsList = (userFriends || []).filter((id) => id !== agent.id);
+      setTargetAgents(friendsList);
     }
   }, [agent, userFriends]);
 
@@ -104,9 +104,9 @@ export default function DialoguePanel() {
         </div>
 
         {/* 可对话对象 */}
-        {userFriends.length > 0 ? (
+        {(userFriends || []).length > 0 ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {userFriends
+            {(userFriends || [])
               .filter((id) => id !== selectedAgent)
               .map((id) => {
                 const friend = getAgentById(id);

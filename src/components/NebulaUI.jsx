@@ -15,7 +15,7 @@ export default function NebulaUI() {
   const setSearchQuery = useNebulaStore((s) => s.setSearchQuery);
   const setDistrictFilter = useNebulaStore((s) => s.setDistrictFilter);
   const memories = useNebulaStore((s) => s.memories);
-  const userFriends = useNebulaStore((s) => s.userFriends);
+  const userFriends = useNebulaStore((s) => s.friends);
   const addFriend = useNebulaStore((s) => s.addFriend);
   const removeFriend = useNebulaStore((s) => s.removeFriend);
 

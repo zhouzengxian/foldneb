@@ -1,6 +1,8 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import NebulaScene from './components/NebulaScene.jsx';
 import NebulaUI from './components/NebulaUI.jsx';
+import PhoneApp from './components/PhoneApp.jsx';
+import DeliberationUI from './components/DeliberationUI.jsx';
 
 function LoadingScreen() {
   const [hidden, setHidden] = useState(false);
@@ -23,6 +25,8 @@ export default function App() {
         <NebulaScene />
       </Suspense>
       <NebulaUI />
+      <PhoneApp />
+      <DeliberationUI />
     </div>
   );
 }

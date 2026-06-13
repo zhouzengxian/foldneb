@@ -37,27 +37,20 @@ function getLabelTexture(label, color) {
   return tex;
 }
 
-export default function HeroSatellites({ agents, getPos }) {
-  const heroWithSatellites = useMemo(
-    () => agents.filter(a => a.tier === 1 && a.satellites?.length > 0),
-    []
-  );
-
-  if (heroWithSatellites.length === 0) return null;
+export default function HeroSatellites({ agent, getPhysPos }) {
+  if (!agent || agent.tier !== 1 || !agent.satellites?.length) return null;
 
   return (
     <group>
-      {heroWithSatellites.map(hero =>
-        hero.satellites.map((sat, i) => (
-          <SatelliteNode
-            key={`${hero.id}-sat-${i}`}
-            parentId={hero.id}
-            sat={sat}
-            getPos={getPos}
-            parentColor={hero.color}
-          />
-        ))
-      )}
+      {agent.satellites.map((sat, i) => (
+        <SatelliteNode
+          key={`${agent.id}-sat-${i}`}
+          parentId={agent.id}
+          sat={sat}
+          getPos={getPhysPos}
+          parentColor={agent.color}
+        />
+      ))}
     </group>
   );
 }

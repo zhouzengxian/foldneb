@@ -107,18 +107,20 @@ function NebulaContent() {
 
   // Demo 飞行
   const originCamRef = useRef(null);
+  const { camera } = useThree();
+  const cameraRef = useRef(camera);
 
   const runDemo = useCallback(() => {
     if (demoActive) return;
     useNebulaStore.getState().setDemoActive(true);
 
     const demoAgents = tier1Agents.slice(0, 6);
-    const { camera } = useThree.getState();
+    const cam = cameraRef.current;
     if (!originCamRef.current) {
       originCamRef.current = {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z,
+        x: cam.position.x,
+        y: cam.position.y,
+        z: cam.position.z,
       };
     }
 
@@ -131,7 +133,7 @@ function NebulaContent() {
 
     demoAgents.forEach((agent, idx) => {
       const [px, py, pz] = agent.position;
-      tl.to(camera.position, {
+      tl.to(cam.position, {
         x: px + 2,
         y: py + 2,
         z: pz + 4,
@@ -146,7 +148,7 @@ function NebulaContent() {
       tl.to({}, { duration: 1.2 });
     });
 
-    tl.to(camera.position, {
+    tl.to(cam.position, {
       x: originCamRef.current.x,
       y: originCamRef.current.y,
       z: originCamRef.current.z,

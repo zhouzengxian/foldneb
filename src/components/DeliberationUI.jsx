@@ -1,0 +1,868 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import useNebulaStore from '../store/useNebulaStore';
+import {
+  analyzeProblem, planRounds, getAgentResponse,
+  extractInsights, generateReport, getAgentInfo,
+  setDeliberationProvider, getDeliberationProvider,
+} from '../utils/deliberationEngine';
+import { MODEL_PROVIDERS, hasValidKey, saveUserCreds, getUserCreds, getProviderModels } from '../utils/modelConfig';
+import DeliberationGraph from './DeliberationGraph';
+import DeliberationHistory from './DeliberationHistory';
+import DEMOS from '../utils/deliberationDemos';
+import { generateReportImage, downloadReportImage } from '../utils/reportImage';
+
+// 预设典型问题（一人公司创始人场景）
+const PRESET_PROBLEMS = [
+  { icon: '🧪', label: '产品留存', text: '产品MVP已上线3个月，有200个试用用户但真正留下来用的不到20%。我该坚持打磨现有功能还是根据反馈做一个更大的改动？' },
+  { icon: '💰', label: '定价策略', text: '我是一个独立开发者，产品功能不错但月收入停留在$500。该涨价服务付费客户，还是走免费+广告模式扩大用户量？' },
+  { icon: '🎯', label: '方向选择', text: '身兼数职的一人公司，同时在做三件事：接外包养现金流、做SaaS产品、经营自媒体内容。精力分散什么都没做好，该怎么取舍？' },
+  { icon: '🔄', label: '获客渠道', text: '我的知识付费产品内容质量很好，但流量全依赖小红书算法推荐。一旦停更就没人来。该All in自媒体还是建立自己的邮件列表/私域？' },
+  { icon: '⚡', label: 'AI冲击', text: '我做的是语言翻译工具，最近GPT-4的翻译质量已经接近我的产品水平。我应该转型做AI辅助工作流还是深耕细分垂直领域做差异化？' },
+];
+
+// ============================================================
+// 推演 UI - 创始人决策推演主界面
+// ============================================================
+
+const PHASES = {
+  idle:       { label: '开始推演',  icon: '⚡' },
+  analyzing:  { label: '分析问题…', icon: '🔍' },
+  planning:   { label: '召集思想者…', icon: '📋' },
+  deliberating: { label: '推演进行中…', icon: '💬' },
+  reporting:  { label: '生成报告…', icon: '📊' },
+  complete:   { label: '推演完成',  icon: '✨' },
+};
+
+export default function DeliberationUI() {
+  const {
+    deliberationOpen, deliberationPhase, deliberationSession,
+    openDeliberation, closeDeliberation, setDeliberationPhase,
+    initDeliberation, addDeliberationRounds, addDeliberationDialogue,
+    completeDeliberationRound, addDeliberationInsight, setDeliberationReport,
+    archiveDeliberation, userProfile, addMemory: storeAddMemory,
+    deliberationHistory, deliberationHistoryView,
+    openDeliberationHistoryView, closeDeliberationHistoryView,
+  } = useNebulaStore();
+
+  const [problem, setProblem] = useState('');
+  const [error, setError] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [mode, setMode] = useState('api'); // 'api' | 'demo'
+  const [modelProvider, setModelProviderLocal] = useState(() => getDeliberationProvider());
+  const [showApiSettings, setShowApiSettings] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [modelInput, setModelInput] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const abortRef = useRef(false);
+  const demoRunningRef = useRef(false);
+  const modeRef = useRef('api');
+  const runDemoRef = useRef(null);
+
+  // 切换模型时同步到引擎，缺少 key 则弹出配置
+  const handleModelChange = (id) => {
+    setModelProviderLocal(id);
+    setDeliberationProvider(id);
+    if (!hasValidKey(id)) {
+      const ex = getUserCreds(id);
+      setApiKeyInput(ex?.apiKey || '');
+      setModelInput(ex?.model || getProviderModels(id)[0] || '');
+      setShowApiSettings(true);
+    } else {
+      setShowApiSettings(false);
+    }
+  };
+
+  // 保存凭据
+  const handleSaveCreds = () => {
+    if (!apiKeyInput.trim() || !modelInput.trim()) return;
+    saveUserCreds(modelProvider, apiKeyInput.trim(), modelInput.trim());
+    setDeliberationProvider(modelProvider);
+    setShowApiSettings(false);
+  };
+
+  // 同步 mode 到 ref（避免 startDeliberation 闭包过期）
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+
+  // 重置
+  useEffect(() => {
+    if (deliberationPhase === 'idle') {
+      setProblem('');
+      setError(null);
+      setLogs([]);
+      abortRef.current = false;
+    }
+  }, [deliberationPhase]);
+
+  const addLog = useCallback((msg, type = 'info') => {
+    setLogs(prev => [...prev, { text: msg, type, time: Date.now() }]);
+  }, []);
+
+  // ========== 主流程 ==========
+  const startDeliberation = useCallback(async () => {
+    if (!problem.trim() || deliberationPhase !== 'idle') return;
+
+    // Demo 模式：直接播放预置推演
+    if (modeRef.current === 'demo' && runDemoRef.current) {
+      await runDemoRef.current();
+      return;
+    }
+
+    abortRef.current = false;
+    setError(null);
+    setLogs([]);
+
+    setDeliberationPhase('analyzing');
+    addLog('🔍 墨池正在分析你的问题…');
+
+    // Step 1: 分析问题
+    const analysis = await analyzeProblem(problem.trim());
+    if (abortRef.current) return;
+    if (!analysis || !analysis.agents || analysis.agents.length < 2) {
+      setError('问题分析失败，请尝试更具体地描述你的困境');
+      setDeliberationPhase('idle');
+      return;
+    }
+    initDeliberation(problem.trim(), analysis);
+    addLog(`定位到「${analysis.domain}」领域`);
+    addLog(`召集 ${analysis.agents.length} 位思想者：${analysis.agents.map(a => getAgentInfo(a.id)?.name || a.id).join('、')}`);
+
+    setDeliberationPhase('planning');
+
+    // Step 2: 规划轮次
+    const rounds = await planRounds(problem.trim(), analysis.domain, analysis.agents.map(a => a.id));
+    if (abortRef.current) return;
+    if (!rounds || rounds.length === 0) {
+      setError('推演规划失败');
+      setDeliberationPhase('idle');
+      return;
+    }
+    addDeliberationRounds(rounds);
+    addLog(`规划 ${rounds.length} 轮推演：${rounds.map(r => r.theme).join(' → ')}`);
+
+    setDeliberationPhase('deliberating');
+
+    const allInsights = [];
+    const sessionRounds = [];
+
+    // Step 3: 逐轮推演
+    for (let ri = 0; ri < rounds.length; ri++) {
+      if (abortRef.current) return;
+      const round = rounds[ri];
+      addLog(`\n--- 第${ri+1}轮：${round.theme} ---`);
+
+      // 并行获取本轮所有Agent回应
+      const previousInsights = allInsights.slice(-3).map(i => i.text).join('; ');
+      const promises = round.agentIds.map(agentId =>
+        getAgentResponse(agentId, {
+          problem: problem.trim(),
+          theme: round.theme,
+          goal: round.goal,
+          roundIndex: ri,
+          previousInsights,
+        })
+      );
+
+      const responses = await Promise.all(promises);
+      if (abortRef.current) return;
+
+      // 存入 store
+      const dialogues = [];
+      for (const resp of responses) {
+        if (resp && resp.text) {
+          dialogues.push(resp);
+          addDeliberationDialogue(ri, resp);
+          addLog(`  ${resp.agentName || resp.agentId}: ${resp.text.slice(0, 60)}…`);
+
+          // 记忆提取：每次Agent回应都生成一条记忆
+          const relationLabel = round.theme.slice(0, 6);
+          storeAddMemory('user', resp.agentId, `${relationLabel}推演`, Date.now(), 'deliberation');
+        }
+      }
+
+      // 提取洞察
+      if (dialogues.length > 0) {
+        const insights = await extractInsights(dialogues, round.theme);
+        if (insights.length > 0) {
+          insights.forEach(ins => {
+            allInsights.push(ins);
+            addDeliberationInsight(ins);
+            const icon = ins.type === 'conflict' ? '⚡' : ins.type === 'consensus' ? '✨' : '💡';
+            addLog(`${icon} ${ins.text}`);
+          });
+        }
+      }
+
+      completeDeliberationRound(ri);
+      sessionRounds.push({ ...round, dialogues });
+    }
+
+    // Step 4: 生成报告
+    setDeliberationPhase('reporting');
+    addLog('\n📊 墨池正在整合推演结果…');
+
+    const report = await generateReport(
+      problem.trim(), analysis.domain, sessionRounds, allInsights
+    );
+    if (abortRef.current) return;
+
+    setDeliberationReport(report || {
+      coreFinding: '推演已完成',
+      keyInsights: allInsights.slice(0, 3).map(i => i.text),
+      actionableAdvice: '请回顾推演过程，选择最适合的路径',
+      reframedProblem: problem.slice(0, 25),
+      followUpQuestions: [],
+    });
+
+    addLog('✨ 推演完成！');
+  }, [problem, deliberationPhase, modeRef]); // modeRef 是稳定 ref
+
+  // 导出报告图片
+  const handleExportReport = useCallback(async () => {
+    const session = deliberationSession;
+    if (!session?.report) return;
+    setExporting(true);
+    try {
+      const blob = await generateReportImage(session);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      downloadReportImage(blob, `FoldNeb-推演-${dateStr}.png`);
+    } catch (err) {
+      console.error('导出失败:', err);
+    }
+    setExporting(false);
+  }, [deliberationSession]);
+
+  const cancelDeliberation = useCallback(() => {
+    abortRef.current = true;
+    demoRunningRef.current = false;
+    setDeliberationPhase('idle');
+  }, []);
+
+  // ========== Demo 播放 ==========
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  runDemoRef.current = async () => {
+    const demoProblem = problem.trim();
+    const demo = DEMOS[demoProblem];
+    if (!demo) { setError('该问题暂无演示数据'); return; }
+
+    abortRef.current = false;
+    demoRunningRef.current = true;
+    setError(null);
+    setLogs([]);
+
+    // Phase 1: 分析
+    setDeliberationPhase('analyzing');
+    addLog('🔍 墨池正在分析你的问题…');
+    await sleep(600);
+    if (abortRef.current) return;
+    initDeliberation(demoProblem, demo.analysis);
+    addLog(`定位到「${demo.analysis.domain}」领域`);
+    addLog(`召集 ${demo.analysis.agents.length} 位思想者：${demo.analysis.agents.map(a => getAgentInfo(a.id)?.name || a.id).join('、')}`);
+    await sleep(400);
+    if (abortRef.current) return;
+
+    // Phase 2: 规划
+    setDeliberationPhase('planning');
+    await sleep(300);
+    if (abortRef.current) return;
+    addDeliberationRounds(demo.rounds);
+    addLog(`规划 ${demo.rounds.length} 轮推演：${demo.rounds.map(r => r.theme).join(' → ')}`);
+    await sleep(300);
+    if (abortRef.current) return;
+
+    // Phase 3: 逐轮推演
+    setDeliberationPhase('deliberating');
+    const allInsights = [];
+
+    for (let ri = 0; ri < demo.rounds.length; ri++) {
+      if (abortRef.current) return;
+      const round = demo.rounds[ri];
+      addLog(`\n--- 第${ri+1}轮：${round.theme} ---`);
+
+      for (const d of round.dialogues) {
+        if (abortRef.current) return;
+        addDeliberationDialogue(ri, d);
+        addLog(`  ${d.agentName || d.agentId}: ${d.text.slice(0, 60)}…`);
+        await sleep(800);
+      }
+
+      if (round.insights && round.insights.length > 0) {
+        round.insights.forEach(ins => {
+          allInsights.push(ins);
+          addDeliberationInsight(ins);
+          const icon = ins.type === 'conflict' ? '⚡' : ins.type === 'consensus' ? '✨' : '💡';
+          addLog(`${icon} ${ins.text}`);
+        });
+      }
+      completeDeliberationRound(ri);
+      await sleep(500);
+    }
+
+    // Phase 4: 报告
+    setDeliberationPhase('reporting');
+    addLog('\n📊 墨池正在整合推演结果…');
+    await sleep(600);
+    if (abortRef.current) return;
+    setDeliberationReport(demo.report);
+    addLog('✨ 推演完成！');
+    demoRunningRef.current = false;
+  };
+
+  // ========== 历史面板 ==========
+  if (showHistory && !deliberationHistoryView) {
+    return <DeliberationHistory onClose={() => setShowHistory(false)} />;
+  }
+  if (deliberationHistoryView) {
+    return <DeliberationHistory />;
+  }
+
+  // ========== 渲染 ==========
+  if (!deliberationOpen) {
+    // 触发按钮
+    return (
+      <button
+        onClick={openDeliberation}
+        title="决策推演"
+        style={{
+          position: 'fixed', bottom: 8, right: 8, zIndex: 30,
+          background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,180,0,0.15))',
+          border: '1px solid rgba(255,215,0,0.35)',
+          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
+          color: '#FFD700', fontSize: '13px', fontFamily: 'system-ui',
+          fontWeight: 600, letterSpacing: '0.5px',
+          boxShadow: '0 0 20px rgba(255,215,0,0.08)',
+        }}
+      >
+        ⚡ 决策推演
+      </button>
+    );
+  }
+
+  const phaseInfo = PHASES[deliberationPhase] || PHASES.idle;
+  const session = deliberationSession;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(4,4,16,0.85)', backdropFilter: 'blur(8px)',
+    }}>
+      {/* 面板 */}
+      <div style={{
+        width: '90vw', maxWidth: 800, maxHeight: '88vh',
+        background: 'rgba(10,10,26,0.96)',
+        border: '1px solid rgba(255,215,0,0.2)',
+        borderRadius: '16px', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 0 60px rgba(255,215,0,0.06), 0 4px 40px rgba(0,0,0,0.5)',
+      }}>
+        {/* 顶栏 */}
+        <div style={{
+          padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: 'rgba(255,215,0,0.03)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '18px' }}>{phaseInfo.icon}</span>
+            <span style={{ color: '#FFD700', fontWeight: 700, fontSize: '15px', fontFamily: 'system-ui' }}>
+              FoldNeb 决策推演
+            </span>
+            <span style={{
+              color: '#889', fontSize: '11px', fontFamily: 'system-ui',
+              background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '10px',
+            }}>
+              {phaseInfo.label}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {/* 模式切换 */}
+            {deliberationPhase === 'idle' && (
+              <div style={{
+                display: 'flex', borderRadius: '8px', overflow: 'hidden',
+                border: '1px solid rgba(255,255,255,0.1)', fontSize: '11px',
+              }}>
+                <button
+                  onClick={() => setMode('api')}
+                  style={{
+                    padding: '4px 10px', border: 'none', cursor: 'pointer',
+                    background: mode === 'api' ? 'rgba(68,136,255,0.2)' : 'rgba(255,255,255,0.04)',
+                    color: mode === 'api' ? '#8cf' : '#889',
+                    fontFamily: 'system-ui', fontWeight: mode === 'api' ? 600 : 400,
+                    transition: 'all 0.2s',
+                  }}
+                >🌐 API</button>
+                <button
+                  onClick={() => setMode('demo')}
+                  style={{
+                    padding: '4px 10px', border: 'none', cursor: 'pointer',
+                    background: mode === 'demo' ? 'rgba(72,196,128,0.2)' : 'rgba(255,255,255,0.04)',
+                    color: mode === 'demo' ? '#8e8' : '#889',
+                    fontFamily: 'system-ui', fontWeight: mode === 'demo' ? 600 : 400,
+                    transition: 'all 0.2s',
+                  }}
+                >🎬 Demo</button>
+              </div>
+            )}
+            {/* 模型选择器（仅 API 模式） */}
+            {deliberationPhase === 'idle' && mode === 'api' && (
+              <select
+                value={modelProvider}
+                onChange={e => handleModelChange(e.target.value)}
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '6px', padding: '4px 8px',
+                  color: '#ccc', fontSize: '11px', fontFamily: 'system-ui',
+                  outline: 'none', cursor: 'pointer', minWidth: '150px',
+                }}
+              >
+                {MODEL_PROVIDERS.map(p => (
+                  <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ddd' }}>
+                    {p.icon} {p.name} {hasValidKey(p.id) ? '' : ' (需配置)'}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* API 配置按钮 */}
+            {deliberationPhase === 'idle' && mode === 'api' && (
+              <button
+                onClick={() => {
+                  const ex = getUserCreds(modelProvider);
+                  setApiKeyInput(ex?.apiKey || '');
+                  setModelInput(ex?.model || getProviderModels(modelProvider)[0] || '');
+                  setShowApiSettings(!showApiSettings);
+                }}
+                title="配置 API Key"
+                style={{
+                  background: showApiSettings ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${showApiSettings ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: '6px', padding: '4px 8px',
+                  color: showApiSettings ? '#FFD700' : '#889',
+                  cursor: 'pointer', fontSize: '13px',
+                  transition: 'all 0.2s',
+                }}
+              >⚙️</button>
+            )}
+            {!hasValidKey(modelProvider) && mode === 'api' && deliberationPhase === 'idle' && (
+              <span style={{ color: '#e66', fontSize: '10px', fontFamily: 'system-ui' }}>
+                ⚠ 需配置 Key
+              </span>
+            )}
+            {/* 历史按钮（idle 时显示） */}
+            {deliberationPhase === 'idle' && deliberationHistory.length > 0 && (
+              <button onClick={() => setShowHistory(true)} style={btnStyle('#8899cc')}>
+                📁 历史 ({deliberationHistory.length})
+              </button>
+            )}
+            {deliberationPhase === 'complete' && (
+              <>
+                <button onClick={handleExportReport} disabled={exporting} style={btnStyle('#FFD700')}>
+                  {exporting ? '⏳' : '📷'} 导出图片
+                </button>
+                <button onClick={archiveDeliberation} style={btnStyle('#4A8')}>
+                  📁 存档
+                </button>
+              </>
+            )}
+            {(deliberationPhase === 'deliberating' || deliberationPhase === 'analyzing' || deliberationPhase === 'planning') && (
+              <button onClick={cancelDeliberation} style={btnStyle('#A44')}>
+                ✕ 取消
+              </button>
+            )}
+            <button onClick={closeDeliberation} style={btnStyle('#666')}>
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* 主体内容 */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', gap: 20 }}>
+          {/* 左侧：推演内容 */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* 输入区 */}
+            {deliberationPhase === 'idle' && (
+              <div style={{ padding: '10px 0' }}>
+                {/* API 配置表单 */}
+                {showApiSettings && mode === 'api' && (
+                  <div style={{
+                    padding: '14px 16px', marginBottom: 14,
+                    background: 'rgba(255,215,0,0.04)',
+                    border: '1px solid rgba(255,215,0,0.2)',
+                    borderRadius: '10px',
+                  }}>
+                    <div style={{
+                      color: '#FFD700', fontSize: '12px', fontWeight: 600,
+                      fontFamily: 'system-ui', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6,
+                    }}>
+                      🔑 配置 {MODEL_PROVIDERS.find(p => p.id === modelProvider)?.name} 的 API
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={{
+                          color: '#889', fontSize: '11px', fontFamily: 'system-ui',
+                          minWidth: '60px', flexShrink: 0,
+                        }}>API Key</label>
+                        <input
+                          type="password"
+                          value={apiKeyInput}
+                          onChange={e => setApiKeyInput(e.target.value)}
+                          placeholder="sk-xxxxx..."
+                          style={{
+                            flex: 1, background: 'rgba(0,0,0,0.4)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '6px', padding: '6px 10px',
+                            color: '#ddd', fontSize: '12px', fontFamily: 'monospace',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={{
+                          color: '#889', fontSize: '11px', fontFamily: 'system-ui',
+                          minWidth: '60px', flexShrink: 0,
+                        }}>Model</label>
+                        <select
+                          value={modelInput}
+                          onChange={e => setModelInput(e.target.value)}
+                          style={{
+                            flex: 1, background: 'rgba(0,0,0,0.4)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '6px', padding: '6px 10px',
+                            color: '#ddd', fontSize: '12px', fontFamily: 'system-ui',
+                            outline: 'none', cursor: 'pointer',
+                          }}
+                        >
+                          {getProviderModels(modelProvider).map(m => (
+                            <option key={m} value={m} style={{ background: '#1a1a2e', color: '#ddd' }}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => {
+                            saveUserCreds(modelProvider, '', '');
+                            setApiKeyInput('');
+                            setShowApiSettings(false);
+                          }}
+                          style={{
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '6px', padding: '5px 14px',
+                            color: '#889', fontSize: '11px', cursor: 'pointer',
+                            fontFamily: 'system-ui',
+                          }}
+                        >清除</button>
+                        <button
+                          onClick={handleSaveCreds}
+                          disabled={!apiKeyInput.trim() || !modelInput.trim()}
+                          style={{
+                            background: (apiKeyInput.trim() && modelInput.trim())
+                              ? 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,180,0,0.2))'
+                              : 'rgba(255,255,255,0.04)',
+                            border: `1px solid ${(apiKeyInput.trim() && modelInput.trim()) ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                            borderRadius: '6px', padding: '5px 14px',
+                            color: (apiKeyInput.trim() && modelInput.trim()) ? '#FFD700' : '#555',
+                            fontSize: '11px', fontWeight: 600, cursor: (apiKeyInput.trim() && modelInput.trim()) ? 'pointer' : 'default',
+                            fontFamily: 'system-ui',
+                          }}
+                        >💾 保存</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <p style={{ color: '#ccd', fontSize: '13px', fontFamily: 'system-ui', margin: '0 0 16px' }}>
+                  告诉我你正在面临什么决策困境。墨池会召集星云中的思想者，帮你从多个维度推演。
+                </p>
+                <textarea
+                  value={problem}
+                  onChange={e => setProblem(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) startDeliberation(); }}
+                  placeholder="例如：产品已有1000个付费用户但增长停滞，该深挖存量还是拓新市场？"
+                  style={{
+                    width: '100%', minHeight: 100, resize: 'vertical',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,215,0,0.15)',
+                    borderRadius: '10px', padding: '14px',
+                    color: '#e0e0f0', fontSize: '14px', fontFamily: 'system-ui',
+                    outline: 'none', lineHeight: 1.6,
+                  }}
+                />
+                {error && <p style={{ color: '#f66', fontSize: '12px', margin: '8px 0' }}>{error}</p>}
+
+                {/* 预设典型问题 */}
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ color: '#667', fontSize: '11px', fontFamily: 'system-ui', marginBottom: 8 }}>
+                    💡 一人公司典型场景（点击快速填入）：
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {PRESET_PROBLEMS.map((p, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setProblem(p.text);
+                          setError(null);
+                        }}
+                        title={p.text}
+                        style={{
+                          background: problem === p.text
+                            ? 'rgba(255,215,0,0.18)'
+                            : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${problem === p.text ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                          borderRadius: '8px', padding: '6px 12px', cursor: 'pointer',
+                          color: problem === p.text ? '#FFD700' : '#aab',
+                          fontSize: '12px', fontFamily: 'system-ui',
+                          transition: 'all 0.2s', maxWidth: '100%', overflow: 'hidden',
+                          textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (problem !== p.text) {
+                            e.currentTarget.style.borderColor = 'rgba(255,215,0,0.3)';
+                            e.currentTarget.style.background = 'rgba(255,215,0,0.08)';
+                            e.currentTarget.style.color = '#ddc';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (problem !== p.text) {
+                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                            e.currentTarget.style.color = '#aab';
+                          }
+                        }}
+                        onDoubleClick={() => setProblem('')}
+                      >
+                        <span style={{ marginRight: 4 }}>{p.icon}</span>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    onClick={startDeliberation}
+                    disabled={!problem.trim()}
+                    style={{
+                      padding: '10px 28px',
+                      background: problem.trim()
+                        ? (mode === 'demo' ? 'linear-gradient(135deg, rgba(72,196,128,0.25), rgba(72,180,128,0.2))' : 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,180,0,0.2))')
+                        : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${problem.trim() ? (mode === 'demo' ? 'rgba(72,196,128,0.4)' : 'rgba(255,215,0,0.4)') : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: '10px', cursor: problem.trim() ? 'pointer' : 'default',
+                      color: problem.trim() ? (mode === 'demo' ? '#8e8' : '#FFD700') : '#555',
+                      fontWeight: 600, fontSize: '14px', fontFamily: 'system-ui',
+                    }}
+                  >
+                    {mode === 'demo' ? '🎬 播放演示' : '⚡ 开始推演'}
+                  </button>
+                  <span style={{ color: '#555', fontSize: '11px', fontFamily: 'system-ui' }}>Ctrl+Enter 快捷发送</span>
+                </div>
+              </div>
+            )}
+
+            {/* 问题展示 */}
+            {session && (
+              <div style={{
+                padding: '12px 16px', marginBottom: 16,
+                background: 'rgba(255,215,0,0.06)', borderLeft: '3px solid rgba(255,215,0,0.4)',
+                borderRadius: '0 8px 8px 0',
+              }}>
+                <div style={{ color: '#889', fontSize: '10px', fontFamily: 'system-ui', marginBottom: 4 }}>
+                  推演问题
+                </div>
+                <div style={{ color: '#e8e0d0', fontSize: '14px', fontFamily: 'system-ui', fontWeight: 500 }}>
+                  {session.problem}
+                </div>
+                {session.domain && (
+                  <div style={{ color: '#FFD700', fontSize: '11px', marginTop: 4, fontFamily: 'system-ui' }}>
+                    域：{session.domain}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 推演轮次 */}
+            {session?.rounds?.map((round, ri) => (
+              <div key={ri} style={{
+                marginBottom: 16, padding: '14px 16px',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '10px',
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+                  color: '#FFD700', fontSize: '13px', fontWeight: 600, fontFamily: 'system-ui',
+                }}>
+                  <span style={{
+                    background: 'rgba(255,215,0,0.15)', padding: '2px 8px',
+                    borderRadius: '8px', fontSize: '11px',
+                  }}>
+                    第{ri + 1}轮
+                  </span>
+                  {round.theme}
+                  <span style={{
+                    color: round.status === 'done' ? '#4A8' : '#889',
+                    fontSize: '10px', marginLeft: 'auto',
+                  }}>
+                    {round.status === 'done' ? '✓' : round.status === 'active' ? '…' : ''}
+                  </span>
+                </div>
+
+                {/* Agent 对话 */}
+                {round.dialogues?.map((d, di) => (
+                  <div key={di} style={{
+                    marginBottom: 8, padding: '10px 12px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: '8px', borderLeft: '2px solid rgba(255,215,0,0.2)',
+                  }}>
+                    <div style={{ color: '#FFD700', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 4 }}>
+                      {d.agentName || d.agentId}
+                    </div>
+                    <div style={{ color: '#ccc', fontSize: '13px', fontFamily: 'system-ui', lineHeight: 1.6 }}>
+                      {d.text}
+                    </div>
+                  </div>
+                ))}
+
+                {round.status === 'pending' && (
+                  <div style={{ color: '#556', fontSize: '12px', fontFamily: 'system-ui', fontStyle: 'italic' }}>
+                    等待推演…
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* 报告 */}
+            {deliberationPhase === 'complete' && session?.report && (
+              <div style={{
+                padding: '16px', marginTop: 8,
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,180,0,0.05))',
+                border: '1px solid rgba(255,215,0,0.3)', borderRadius: '12px',
+              }}>
+                <div style={{ color: '#FFD700', fontSize: '15px', fontWeight: 700, fontFamily: 'system-ui', marginBottom: 14 }}>
+                  📋 推演报告
+                </div>
+
+                {/* 重新框定 */}
+                <ReportSection icon="🔄" label="重新框定" color="#E8D080">
+                  {session.report.reframedProblem}
+                </ReportSection>
+
+                {/* 核心发现 */}
+                <ReportSection icon="💡" label="核心发现" color="#FFD700">
+                  {session.report.coreFinding}
+                </ReportSection>
+
+                {/* 关键洞察 */}
+                {session.report.keyInsights?.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 6 }}>
+                      🔑 关键洞察
+                    </div>
+                    {session.report.keyInsights.map((ins, i) => (
+                      <div key={i} style={{
+                        color: '#ccd', fontSize: '12px', fontFamily: 'system-ui',
+                        padding: '4px 0', paddingLeft: 12, borderLeft: '2px solid rgba(255,215,0,0.2)',
+                        marginBottom: 4,
+                      }}>
+                        {ins}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 可执行建议 */}
+                <ReportSection icon="🎯" label="行动建议" color="#80E8A0">
+                  {session.report.actionableAdvice}
+                </ReportSection>
+
+                {/* 后续可追问 */}
+                {session.report.followUpQuestions?.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 6 }}>
+                      🤔 你可能还想问
+                    </div>
+                    {session.report.followUpQuestions.map((q, i) => (
+                      <div key={i} style={{
+                        color: '#99b', fontSize: '12px', fontFamily: 'system-ui',
+                        padding: '6px 10px', marginBottom: 4,
+                        background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                        onClick={() => {
+                          setProblem(q);
+                          archiveDeliberation();
+                          setTimeout(() => {
+                            useNebulaStore.getState().openDeliberation();
+                            setProblem(q);
+                          }, 100);
+                        }}
+                      >
+                        → {q}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 实时日志 */}
+            {logs.length > 0 && deliberationPhase !== 'complete' && (
+              <div style={{
+                marginTop: 12, padding: '10px 14px',
+                background: 'rgba(0,0,0,0.3)', borderRadius: '8px',
+                maxHeight: 160, overflow: 'auto',
+                fontFamily: '"Cascadia Code",monospace', fontSize: '11px',
+              }}>
+                {logs.map((log, i) => (
+                  <div key={i} style={{
+                    color: log.type === 'error' ? '#f66' : '#889',
+                    padding: '2px 0', lineHeight: 1.5,
+                  }}>
+                    {log.text}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 右侧：推演图谱 */}
+          {session && (
+            <div style={{ width: 280, flexShrink: 0 }}>
+              <DeliberationGraph session={session} phase={deliberationPhase} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========== 小组件 ==========
+function ReportSection({ icon, label, color, children }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 4 }}>
+        {icon} {label}
+      </div>
+      <div style={{
+        color: color || '#ccd', fontSize: '13px', fontFamily: 'system-ui',
+        lineHeight: 1.6, padding: '6px 10px',
+        background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function btnStyle(color) {
+  return {
+    background: 'rgba(255,255,255,0.05)', border: `1px solid ${color}33`,
+    borderRadius: '6px', padding: '4px 10px', cursor: 'pointer',
+    color: color, fontSize: '12px', fontFamily: 'system-ui',
+  };
+}
