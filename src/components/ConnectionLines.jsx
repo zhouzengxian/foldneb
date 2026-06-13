@@ -15,10 +15,13 @@ export default function ConnectionLines({ connections, getPos, memories = {} }) 
         if (!fromAgent || !toAgent) return null;
 
         const hasMemory = conn.interactionCount && conn.interactionCount > 0;
+        const isOwnership = conn.isOwnership || (conn.from === 'user' && conn.to === 'custom_clone');
 
         return (
           <React.Fragment key={`conn-${conn.from}-${conn.to}-${idx}`}>
-            {hasMemory ? (
+            {isOwnership ? (
+              <OwnerLine conn={conn} getPos={getPos} />
+            ) : hasMemory ? (
               <MemoryLine conn={conn} fromAgent={fromAgent} getPos={getPos} />
             ) : (
               <StaticLine conn={conn} fromAgent={fromAgent} getPos={getPos} />
@@ -51,6 +54,59 @@ function StaticLine({ conn, fromAgent, getPos }) {
         radius={0.03}
         color={fromAgent.color || '#4488FF'}
         opacity={0.06}
+        blending={THREE.AdditiveBlending}
+      />
+      {/* 碰撞体 */}
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.15}
+        color="#000000"
+        opacity={0}
+      />
+    </group>
+  );
+}
+
+/**
+ * 归属粗线 OwnerLine — 用户与自定义分身之间的专属连接
+ * 青白色 (#7DF9FF)、线宽约为 MemoryLine 的 3 倍、带呼吸脉冲
+ */
+function OwnerLine({ conn, getPos }) {
+  return (
+    <group>
+      {/* 外层柔光 */}
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.12}
+        color="#7DF9FF"
+        opacity={0.18}
+        blending={THREE.AdditiveBlending}
+        pulse
+      />
+      {/* 中层 */}
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.05}
+        color="#A8FFF5"
+        opacity={0.55}
+        blending={THREE.AdditiveBlending}
+        pulse
+        pulseDelay={0.5}
+      />
+      {/* 核心亮线 */}
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.02}
+        color="#FFFFFF"
+        opacity={0.95}
         blending={THREE.AdditiveBlending}
       />
       {/* 碰撞体 */}
@@ -108,8 +164,9 @@ function MemoryLine({ conn, fromAgent, getPos }) {
 
 /**
  * 力导向实时管状连线
+ * pulse: 启用呼吸脉冲（opacity 周期性变化）
  */
-function ForceTube({ from, to, getPos, radius, color, opacity, blending }) {
+function ForceTube({ from, to, getPos, radius, color, opacity, blending, pulse, pulseDelay }) {
   const tubeRef = React.useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const geo = useMemo(() => new THREE.CylinderGeometry(radius, radius, 1, 8), [radius]);
@@ -124,10 +181,13 @@ function ForceTube({ from, to, getPos, radius, color, opacity, blending }) {
       }),
     [color, opacity, blending]
   );
+  const baseOpacity = opacity;
+  const delay = pulseDelay || 0;
 
-  // 每帧更新位置
+  // 每帧更新位置 + 脉冲
   React.useEffect(() => {
     if (!getPos) return;
+    const startTime = Date.now();
     const interval = setInterval(() => {
       if (!tubeRef.current) return;
       const p1 = getPos(from);
@@ -147,10 +207,17 @@ function ForceTube({ from, to, getPos, radius, color, opacity, blending }) {
       tubeRef.current.position.copy(mid);
       tubeRef.current.quaternion.copy(quat);
       tubeRef.current.scale.set(1, len, 1);
+
+      // 呼吸脉冲（sine 波，周期 1.6s）
+      if (pulse && baseOpacity != null) {
+        const t = (Date.now() - startTime) / 1000 + delay;
+        const breathe = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(t * Math.PI / 0.8));
+        tubeRef.current.material.opacity = baseOpacity * breathe;
+      }
     }, 16);
 
     return () => clearInterval(interval);
-  }, [from, to, getPos]);
+  }, [from, to, getPos, pulse, baseOpacity, delay]);
 
   return <mesh ref={tubeRef} geometry={geo} material={mat} />;
 }

@@ -3,6 +3,8 @@ import useNebulaStore from '../store/useNebulaStore.js';
 import { tier1Agents, districts, getAgentById } from '../data/gameData.js';
 import { openInObsidian } from '../utils/obsidianLink.js';
 import DialoguePanel from './DialoguePanel.jsx';
+import CloneCreator from './CloneCreator.jsx';
+import CustomCloneChat from './CustomCloneChat.jsx';
 
 export default function NebulaUI() {
   const selectedAgent = useNebulaStore((s) => s.selectedAgent);
@@ -34,6 +36,9 @@ export default function NebulaUI() {
   const demoShowDeliberation = useNebulaStore((s) => s.demoShowDeliberation);
   const takeScreenshot = useNebulaStore((s) => s.takeScreenshot);
   const screenshotReady = useNebulaStore((s) => s.screenshotReady);
+  // 自定义分身
+  const customClone = useNebulaStore((s) => s.customClone);
+  const openCloneCreator = useNebulaStore((s) => s.openCloneCreator);
 
   // 搜索过滤
   useEffect(() => {
@@ -109,6 +114,17 @@ export default function NebulaUI() {
                 fontFamily: 'inherit', letterSpacing: '0.05em', transition: 'all 0.2s',
               }}>✨ 星河巡游</button>
             )}
+            <button onClick={openCloneCreator} style={{
+              padding: '7px 14px', borderRadius: 8,
+              background: customClone
+                ? 'linear-gradient(135deg, rgba(125,249,255,0.22), rgba(125,249,255,0.08))'
+                : 'linear-gradient(135deg, rgba(125,249,255,0.12), rgba(125,249,255,0.04))',
+              border: '1px solid ' + (customClone ? 'rgba(125,249,255,0.5)' : 'rgba(125,249,255,0.3)'),
+              backdropFilter: 'blur(8px)',
+              color: '#7DF9FF', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'inherit', letterSpacing: '0.05em', transition: 'all 0.2s',
+              boxShadow: customClone ? '0 0 12px rgba(125,249,255,0.2)' : 'none',
+            }}>{customClone ? `🪐 ${customClone.avatar} ${customClone.name}` : '🪐 创建分身'}</button>
             <button onClick={takeScreenshot} style={{
               padding: '7px 12px', borderRadius: 8,
               background: screenshotReady ? 'rgba(100,255,180,0.15)' : 'rgba(80,80,90,0.12)',
@@ -282,7 +298,9 @@ export default function NebulaUI() {
               <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{agent.name}</div>
               <div style={{ fontSize: 11, color: agent.color, opacity: 0.85 }}>{agent.title}</div>
               <div style={{ fontSize: 10, color: '#7788aa', marginTop: 2 }}>
-                {districts.find(d => d.id === agent.district)?.name || agent.district} · {agent.tier === 1 ? 'Tier-1 明星' : `Tier-${agent.tier}`}
+                {agent.isCustom
+                  ? '专属分身 · 锚定在你身旁'
+                  : `${districts.find(d => d.id === agent.district)?.name || agent.district} · ${agent.tier === 1 ? 'Tier-1 明星' : `Tier-${agent.tier}`}`}
               </div>
             </div>
           </div>
@@ -335,63 +353,86 @@ export default function NebulaUI() {
             </div>
           )}
 
-          {/* Obsidian 跳转按钮 */}
-          <button onClick={handleOpenObsidian} style={{
-            width: '100%', padding: '7px', borderRadius: 8,
-            background: 'rgba(99,85,188,0.12)', border: '1px solid rgba(99,85,188,0.25)',
-            color: '#8866CC', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-            marginBottom: 8,
-          }}>
-            📓 在 Obsidian 中打开档案
-          </button>
-          {obsidianStatus && (
-            <div style={{ fontSize: 10, color: '#FFD700', textAlign: 'center', marginBottom: 6 }}>{obsidianStatus}</div>
+          {/* Obsidian 跳转按钮（自定义分身不显示） */}
+          {selectedAgent !== 'custom_clone' && (
+            <>
+              <button onClick={handleOpenObsidian} style={{
+                width: '100%', padding: '7px', borderRadius: 8,
+                background: 'rgba(99,85,188,0.12)', border: '1px solid rgba(99,85,188,0.25)',
+                color: '#8866CC', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                marginBottom: 8,
+              }}>
+                📓 在 Obsidian 中打开档案
+              </button>
+              {obsidianStatus && (
+                <div style={{ fontSize: 10, color: '#FFD700', textAlign: 'center', marginBottom: 6 }}>{obsidianStatus}</div>
+              )}
+
+              {/* 知识库预览卡片 */}
+              <div style={{
+                marginBottom: 8, padding: '10px 12px',
+                background: 'rgba(99,85,188,0.06)', borderRadius: 10,
+                border: '1px solid rgba(99,85,188,0.12)',
+              }}>
+                <div style={{ fontSize: 10, color: '#8866CC', marginBottom: 6, letterSpacing: '0.05em' }}>
+                  📂 Obsidian 知识库预览
+                </div>
+                <div style={{ fontSize: 10, color: '#7788aa', lineHeight: 1.6 }}>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+                    <span style={{ color: '#6688aa', minWidth: 50 }}>路径</span>
+                    <span style={{ color: '#aabbcc' }}>
+                      AI一人公司/11-黑客松大赛/折叠星云agent数据库/{agent.tier === 2 ? '2_精英星团' : '1_智慧星河'}/{districts.find(d => d.id === agent.district)?.name || agent.district}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+                    <span style={{ color: '#6688aa', minWidth: 50 }}>档案</span>
+                    <span style={{ color: '#aabbcc' }}>{agent.name}.md</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <span style={{ color: '#6688aa', minWidth: 50 }}>类型</span>
+                    <span style={{
+                      padding: '1px 6px', borderRadius: 4, fontSize: 9,
+                      background: agent.tier === 2 ? 'rgba(136,153,204,0.15)' : 'rgba(255,215,0,0.1)',
+                      color: agent.tier === 2 ? '#8899cc' : '#FFD700',
+                    }}>
+                      {agent.tier === 2 ? '精英星团' : '智慧星河'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
-          {/* 知识库预览卡片 */}
-          <div style={{ 
-            marginBottom: 8, padding: '10px 12px',
-            background: 'rgba(99,85,188,0.06)', borderRadius: 10,
-            border: '1px solid rgba(99,85,188,0.12)',
-          }}>
-            <div style={{ fontSize: 10, color: '#8866CC', marginBottom: 6, letterSpacing: '0.05em' }}>
-              📂 Obsidian 知识库预览
-            </div>
-            <div style={{ fontSize: 10, color: '#7788aa', lineHeight: 1.6 }}>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
-                <span style={{ color: '#6688aa', minWidth: 50 }}>路径</span>
-                <span style={{ color: '#aabbcc' }}>
-                  AI一人公司/11-黑客松大赛/折叠星云agent数据库/{agent.tier === 2 ? '2_精英星团' : '1_智慧星河'}/{districts.find(d => d.id === agent.district)?.name || agent.district}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
-                <span style={{ color: '#6688aa', minWidth: 50 }}>档案</span>
-                <span style={{ color: '#aabbcc' }}>{agent.name}.md</span>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <span style={{ color: '#6688aa', minWidth: 50 }}>类型</span>
-                <span style={{ 
-                  padding: '1px 6px', borderRadius: 4, fontSize: 9,
-                  background: agent.tier === 2 ? 'rgba(136,153,204,0.15)' : 'rgba(255,215,0,0.1)',
-                  color: agent.tier === 2 ? '#8899cc' : '#FFD700',
-                }}>
-                  {agent.tier === 2 ? '精英星团' : '智慧星河'}
-                </span>
-              </div>
-            </div>
-          </div>
+          {/* 自定义分身：编辑入口 */}
+          {selectedAgent === 'custom_clone' && (
+            <button
+              onClick={() => useNebulaStore.getState().openCloneCreator()}
+              style={{
+                width: '100%', padding: '7px', borderRadius: 8,
+                background: 'rgba(125,249,255,0.1)', border: '1px solid rgba(125,249,255,0.3)',
+                color: '#7DF9FF', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                marginBottom: 8,
+              }}
+            >
+              ✏️ 编辑分身设置
+            </button>
+          )}
 
-          {/* 关注/取消关注 */}
-          <div style={{ marginBottom: 8 }}>
-            {userFriends.includes(selectedAgent) ? (
-              <button onClick={() => removeFriend(selectedAgent)} style={{ width: '100%', padding: '7px', borderRadius: 8, background: 'rgba(255,100,100,0.08)', border: '1px solid rgba(255,100,100,0.2)', color: '#ff8888', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>❌ 取消关注</button>
-            ) : (
-              <button onClick={() => addFriend(selectedAgent)} style={{ width: '100%', padding: '7px', borderRadius: 8, background: `${agent.color}18`, border: `1px solid ${agent.color}35`, color: agent.color, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>⭐ 关注 {agent.name}</button>
-            )}
-          </div>
+          {/* 关注/取消关注 / 自定义分身聊天 */}
+          {selectedAgent === 'custom_clone' ? (
+            <CustomCloneChat />
+          ) : (
+            <div style={{ marginBottom: 8 }}>
+              {userFriends.includes(selectedAgent) ? (
+                <button onClick={() => removeFriend(selectedAgent)} style={{ width: '100%', padding: '7px', borderRadius: 8, background: 'rgba(255,100,100,0.08)', border: '1px solid rgba(255,100,100,0.2)', color: '#ff8888', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>❌ 取消关注</button>
+              ) : (
+                <button onClick={() => addFriend(selectedAgent)} style={{ width: '100%', padding: '7px', borderRadius: 8, background: `${agent.color}18`, border: `1px solid ${agent.color}35`, color: agent.color, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>⭐ 关注 {agent.name}</button>
+              )}
+            </div>
+          )}
 
-          {/* 对话面板（仅关注后可见） */}
-          {userFriends.includes(selectedAgent) && <DialoguePanel />}
+          {/* 对话面板（仅关注后可见，自定义分身除外） */}
+          {selectedAgent !== 'custom_clone' && userFriends.includes(selectedAgent) && <DialoguePanel />}
 
           {/* 记忆统计 */}
           <div style={{ padding: '10px 12px', background: 'rgba(255,215,0,0.04)', borderRadius: 10, border: '1px solid rgba(255,215,0,0.08)', marginTop: 8, marginBottom: 8 }}>
@@ -533,12 +574,12 @@ export default function NebulaUI() {
           )}
         </>
       )}
-      {/* 右下角调试按钮 */}
+      {/* 右上角调试按钮 */}
       <button
         onClick={() => setDebugPanelOpen(!debugPanelOpen)}
         title="调试工具"
         style={{
-          position: 'fixed', bottom: 8, right: 130, zIndex: 30,
+          position: 'fixed', top: 24, right: 24, zIndex: 30,
           pointerEvents: 'auto',
           background: 'rgba(136,153,204,0.12)',
           border: '1px solid rgba(136,153,204,0.25)',
@@ -548,6 +589,9 @@ export default function NebulaUI() {
           boxShadow: '0 0 20px rgba(136,153,204,0.08)',
         }}
       >🔧 调试</button>
+
+      {/* ========== 自定义分身 Agent 创建/编辑表单 ========== */}
+      <CloneCreator />
     </div>
   );
 }

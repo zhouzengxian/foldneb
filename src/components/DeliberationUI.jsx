@@ -5,11 +5,13 @@ import {
   extractInsights, generateReport, getAgentInfo,
   setDeliberationProvider, getDeliberationProvider,
 } from '../utils/deliberationEngine';
-import { MODEL_PROVIDERS, hasValidKey, saveUserCreds, getUserCreds, getProviderModels, getLastApiError, getCorsProxyUrl, setCorsProxyUrl, getRequestPreview, testApiConnection } from '../utils/modelConfig';
+import { MODEL_PROVIDERS, hasValidKey, getUserCreds, getProviderModels, getLastApiError } from '../utils/modelConfig';
+import ApiSettingsPanel from './ApiSettingsPanel';
 import DeliberationGraph from './DeliberationGraph';
 import DeliberationHistory from './DeliberationHistory';
 import DEMOS from '../utils/deliberationDemos';
 import { generateReportImage, downloadReportImage } from '../utils/reportImage';
+import { tier1Agents } from '../data/gameData';
 
 // 预设典型问题（一人公司创始人场景）
 const PRESET_PROBLEMS = [
@@ -19,6 +21,47 @@ const PRESET_PROBLEMS = [
   { icon: '🔄', label: '获客渠道', text: '我的知识付费产品内容质量很好，但流量全依赖小红书算法推荐。一旦停更就没人来。该All in自媒体还是建立自己的邮件列表/私域？' },
   { icon: '⚡', label: 'AI冲击', text: '我做的是语言翻译工具，最近GPT-4的翻译质量已经接近我的产品水平。我应该转型做AI辅助工作流还是深耕细分垂直领域做差异化？' },
 ];
+
+// ============================================================
+// 从横向「决策推演」结果提炼纵向「时间折叠」profile
+// 横向已经多视角看透问题，纵向带这份结论去问"未来怎么看"
+// ============================================================
+function buildTemporalPrefillFromDeliberation(session, userName = '') {
+  if (!session) return null;
+  const report = session.report || {};
+  const insights = report.keyInsights || session.insights || [];
+
+  // 从洞察中找冲突类（横向指出风险/争议）
+  const conflicts = insights.filter(i => i?.type === 'conflict').map(i => i.text);
+  // 从洞察中找共识/机会类（横向给出的方向）
+  const consensus = insights.filter(i => i?.type === 'consensus' || i?.type === 'insight').map(i => i.text);
+
+  const currentSituation =
+    report.coreFinding?.trim() ||
+    session.problem?.trim() ||
+    '';
+  const goal =
+    report.actionableAdvice?.trim() ||
+    (consensus.length ? consensus.join('；') : '') ||
+    '';
+  const biggestFear =
+    (conflicts.length ? conflicts.join('；') : '') ||
+    report.reframedProblem?.trim() ||
+    '';
+  const keyDecision =
+    report.reframedProblem?.trim() ||
+    session.problem?.trim() ||
+    '';
+
+  return {
+    name: userName || '',
+    currentSituation,
+    goal,
+    biggestFear,
+    keyDecision,
+    _source: 'deliberation', // 标记来源，便于 UI 展示"基于本次推演"
+  };
+}
 
 // ============================================================
 // 推演 UI - 创始人决策推演主界面
@@ -42,6 +85,7 @@ export default function DeliberationUI() {
     archiveDeliberation, userProfile, addMemory: storeAddMemory,
     deliberationHistory, deliberationHistoryView,
     openDeliberationHistoryView, closeDeliberationHistoryView,
+    openTemporal, openTemporalWithPrefill,
   } = useNebulaStore();
 
   const [problem, setProblem] = useState('');
@@ -54,13 +98,9 @@ export default function DeliberationUI() {
   const [modelInput, setModelInput] = useState('');
   const [exporting, setExporting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showCorsConfig, setShowCorsConfig] = useState(false);
-  const [corsProxyInput, setCorsProxyInput] = useState(() => getCorsProxyUrl());
   const [wasCancelled, setWasCancelled] = useState(false);
-  const [showReqPreview, setShowReqPreview] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
   const [credsTick, setCredsTick] = useState(0); // 保存后刷新预览
+  const [selectedNode, setSelectedNode] = useState(null); // 图谱选中的节点
   const abortRef = useRef(false);
   const demoRunningRef = useRef(false);
   const modeRef = useRef('api');
@@ -99,42 +139,18 @@ export default function DeliberationUI() {
     setTypedTexts({});
   }, []);
 
-  // 切换模型时同步到引擎，缺少 key 则弹出配置
+  // 切换模型：同步到引擎；缺少 key 自动弹出配置面板
   const handleModelChange = (id) => {
     setModelProviderLocal(id);
     setDeliberationProvider(id);
-    if (!hasValidKey(id)) {
-      const ex = getUserCreds(id);
-      setApiKeyInput(ex?.apiKey || '');
-      setModelInput(ex?.model || getProviderModels(id)[0] || '');
-      setShowApiSettings(true);
-    } else {
-      setShowApiSettings(false);
-    }
+    setShowApiSettings(!hasValidKey(id));
   };
 
-  // 保存凭据
-  const handleSaveCreds = () => {
-    if (!apiKeyInput.trim() || !modelInput.trim()) return;
-    saveUserCreds(modelProvider, apiKeyInput.trim(), modelInput.trim());
-    setDeliberationProvider(modelProvider);
+  // ApiSettingsPanel 保存回调：刷新本地缓存，关闭面板
+  const handleCredsSaved = () => {
     setCredsTick(t => t + 1);
-    setTestResult(null);
-    setShowApiSettings(false);
+    if (hasValidKey(modelProvider)) setShowApiSettings(false);
   };
-
-  // 测试连接
-  const handleTestConnection = useCallback(async () => {
-    setTesting(true);
-    setTestResult(null);
-    // 先确保最新输入已保存
-    if (apiKeyInput.trim() && modelInput.trim()) {
-      saveUserCreds(modelProvider, apiKeyInput.trim(), modelInput.trim());
-    }
-    const result = await testApiConnection(modelProvider);
-    setTestResult(result);
-    setTesting(false);
-  }, [apiKeyInput, modelInput, modelProvider]);
 
   // 同步 mode 到 ref（避免 startDeliberation 闭包过期）
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -178,6 +194,10 @@ export default function DeliberationUI() {
 
     setDeliberationPhase('analyzing');
     addLog('🔍 墨池正在分析你的问题…');
+
+    // 主流程外层 try/catch：捕获引擎抛出的 LLMUnavailableError（超时/无应答/解析失败）等，
+    // 不让大模型失败的本地兜底数据被当成 AI 回复显示给用户（避免"瞎说"）
+    try {
 
     // Step 1: 分析问题
     const analysis = await analyzeProblem(problem.trim());
@@ -235,9 +255,10 @@ export default function DeliberationUI() {
       // 存入 store + 逐字打出
       const dialogues = [];
       let failCount = 0;
+      let firstFailureReason = '';
       for (const resp of responses) {
         if (abortRef.current) return;
-        if (resp && resp.text) {
+        if (resp && resp.text && !resp.failed) {
           const key = `${ri}-${resp.agentId}`;
           // ★ 先置空，再添加对话 → 卡片出现时是空白的
           setTypedTexts(prev => ({ ...prev, [key]: '' }));
@@ -251,12 +272,18 @@ export default function DeliberationUI() {
         } else {
           failCount++;
           const agentName = resp?.agentName || resp?.agentId || 'Unknown';
-          addLog(`  ⚠ ${agentName}: API 回应失败`, 'error');
+          const reason = resp?.error || '无应答';
+          if (!firstFailureReason) firstFailureReason = reason;
+          addLog(`  ⚠ ${agentName}: 大模型无应答（${reason}）`, 'error');
         }
       }
       if (failCount > 0 && failCount === responses.length) {
-        const apiErr = getLastApiError();
-        addLog(`  ❌ 本轮全部 Agent 回应失败: ${apiErr || '网络请求异常，请检查网络或切换模型'}`, 'error');
+        // 本轮所有 Agent 都失败 → 中断推演，明确告知
+        const msg = `本轮全部 Agent 大模型无应答：${firstFailureReason || getLastApiError() || '网络请求异常'}`;
+        setError(msg);
+        addLog(`❌ ${msg}`, 'error');
+        setDeliberationPhase('idle');
+        return;
       }
 
       // 提取洞察
@@ -285,15 +312,29 @@ export default function DeliberationUI() {
     );
     if (abortRef.current) return;
 
-    setDeliberationReport(report || {
-      coreFinding: '推演已完成',
-      keyInsights: allInsights.slice(0, 3).map(i => i.text),
-      actionableAdvice: '请回顾推演过程，选择最适合的路径',
-      reframedProblem: problem.slice(0, 25),
-      followUpQuestions: [],
-    });
+    // 报告生成失败：不再用本地兜底假数据，明确告知用户（避免"瞎说"）
+    if (!report) {
+      const apiErr = getLastApiError();
+      const msg = apiErr || '推演报告生成失败（大模型无应答）';
+      setError(msg);
+      addLog(`❌ ${msg}`, 'error');
+      setDeliberationPhase('idle');
+      return;
+    }
+    setDeliberationReport(report);
 
     addLog('✨ 推演完成！');
+
+    } catch (e) {
+      if (abortRef.current) return;          // 用户主动取消，不报错
+      if (e?.name === 'AbortError') return;  // fetch 取消
+      const reason = e?.name === 'LLMUnavailableError'
+        ? e.message
+        : (e?.message || '推演中断（未知错误）');
+      setError(reason);
+      addLog(`❌ ${reason}`, 'error');
+      setDeliberationPhase('idle');
+    }
   }, [problem, deliberationPhase, modeRef]); // modeRef 是稳定 ref
 
   // 导出报告图片
@@ -326,6 +367,14 @@ export default function DeliberationUI() {
     closeDeliberation();
     setTimeout(() => openDeliberation(), 80);
   }, [archiveDeliberation, closeDeliberation, openDeliberation]);
+
+  // 把本次横向推演结果带入纵向时间折叠（剩余 10%：横纵联动入口）
+  const handleLaunchTemporal = useCallback(() => {
+    const prefill = buildTemporalPrefillFromDeliberation(deliberationSession, userProfile?.name);
+    // 关闭决策推演面板，打开时间折叠面板并预填
+    closeDeliberation();
+    setTimeout(() => openTemporalWithPrefill(prefill), 80);
+  }, [deliberationSession, userProfile, closeDeliberation, openTemporalWithPrefill]);
 
   // ========== Demo 播放 ==========
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -413,23 +462,41 @@ export default function DeliberationUI() {
 
   // ========== 渲染 ==========
   if (!deliberationOpen) {
-    // 触发按钮
+    // 触发按钮组（决策推演 + 时间折叠）
     return (
-      <button
-        onClick={openDeliberation}
-        title="决策推演"
-        style={{
-          position: 'fixed', bottom: 8, right: 8, zIndex: 30,
-          background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,180,0,0.15))',
-          border: '1px solid rgba(255,215,0,0.35)',
-          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
-          color: '#FFD700', fontSize: '13px', fontFamily: 'system-ui',
-          fontWeight: 600, letterSpacing: '0.5px',
-          boxShadow: '0 0 20px rgba(255,215,0,0.08)',
-        }}
-      >
-        ⚡ 决策推演
-      </button>
+      <div style={{
+        position: 'fixed', bottom: 8, right: 8, zIndex: 30,
+        display: 'flex', gap: 8,
+      }}>
+        <button
+          onClick={openTemporal}
+          title="时间折叠 · 与未来的自己对话"
+          style={{
+            background: 'linear-gradient(135deg, rgba(68,136,255,0.2), rgba(68,100,255,0.15))',
+            border: '1px solid rgba(68,136,255,0.4)',
+            borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
+            color: '#8cf', fontSize: '13px', fontFamily: 'system-ui',
+            fontWeight: 600, letterSpacing: '0.5px',
+            boxShadow: '0 0 20px rgba(68,136,255,0.1)',
+          }}
+        >
+          ⏳ 时间折叠
+        </button>
+        <button
+          onClick={openDeliberation}
+          title="决策推演"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,180,0,0.15))',
+            border: '1px solid rgba(255,215,0,0.35)',
+            borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
+            color: '#FFD700', fontSize: '13px', fontFamily: 'system-ui',
+            fontWeight: 600, letterSpacing: '0.5px',
+            boxShadow: '0 0 20px rgba(255,215,0,0.08)',
+          }}
+        >
+          ⚡ 决策推演
+        </button>
+      </div>
     );
   }
 
@@ -444,7 +511,7 @@ export default function DeliberationUI() {
     }}>
       {/* 面板 */}
       <div style={{
-        width: '90vw', maxWidth: 800, maxHeight: '88vh',
+        width: '95vw', maxWidth: 1100, maxHeight: '88vh',
         background: 'rgba(10,10,26,0.96)',
         border: '1px solid rgba(255,215,0,0.2)',
         borderRadius: '16px', overflow: 'hidden',
@@ -522,12 +589,7 @@ export default function DeliberationUI() {
             {/* API 配置按钮 */}
             {deliberationPhase === 'idle' && mode === 'api' && (
               <button
-                onClick={() => {
-                  const ex = getUserCreds(modelProvider);
-                  setApiKeyInput(ex?.apiKey || '');
-                  setModelInput(ex?.model || getProviderModels(modelProvider)[0] || '');
-                  setShowApiSettings(!showApiSettings);
-                }}
+                onClick={() => setShowApiSettings(!showApiSettings)}
                 title="配置 API Key"
                 style={{
                   background: showApiSettings ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.05)',
@@ -566,6 +628,18 @@ export default function DeliberationUI() {
                 <button onClick={archiveDeliberation} style={btnStyle('#4A8')}>
                   📁 存档
                 </button>
+                <button
+                  onClick={handleLaunchTemporal}
+                  title="用本次推演的结论去问未来的自己"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(68,136,255,0.22), rgba(68,100,255,0.15))',
+                    border: '1px solid rgba(68,136,255,0.45)',
+                    borderRadius: '6px', padding: '4px 12px', cursor: 'pointer',
+                    color: '#9bb8ff', fontSize: '12px', fontFamily: 'system-ui', fontWeight: 600,
+                  }}
+                >
+                  ⏳ 带入时间折叠
+                </button>
               </>
             )}
             {(deliberationPhase === 'deliberating' || deliberationPhase === 'analyzing' || deliberationPhase === 'planning') && (
@@ -586,246 +660,9 @@ export default function DeliberationUI() {
             {/* 输入区 */}
             {deliberationPhase === 'idle' && (
               <div style={{ padding: '10px 0' }}>
-                {/* API 配置表单 */}
+                {/* API 配置面板（共享组件，时间折叠复用同一份） */}
                 {showApiSettings && mode === 'api' && (
-                  <div style={{
-                    padding: '14px 16px', marginBottom: 14,
-                    background: 'rgba(255,215,0,0.04)',
-                    border: '1px solid rgba(255,215,0,0.2)',
-                    borderRadius: '10px',
-                  }}>
-                    <div style={{
-                      color: '#FFD700', fontSize: '12px', fontWeight: 600,
-                      fontFamily: 'system-ui', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6,
-                    }}>
-                      🔑 配置 {MODEL_PROVIDERS.find(p => p.id === modelProvider)?.name} 的 API
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label style={{
-                          color: '#889', fontSize: '11px', fontFamily: 'system-ui',
-                          minWidth: '60px', flexShrink: 0,
-                        }}>API Key</label>
-                        <input
-                          type="password"
-                          value={apiKeyInput}
-                          onChange={e => setApiKeyInput(e.target.value)}
-                          placeholder="sk-xxxxx..."
-                          style={{
-                            flex: 1, background: 'rgba(0,0,0,0.4)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '6px', padding: '6px 10px',
-                            color: '#ddd', fontSize: '12px', fontFamily: 'monospace',
-                            outline: 'none',
-                          }}
-                        />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label style={{
-                          color: '#889', fontSize: '11px', fontFamily: 'system-ui',
-                          minWidth: '60px', flexShrink: 0,
-                        }}>Model</label>
-                        <select
-                          value={modelInput}
-                          onChange={e => setModelInput(e.target.value)}
-                          style={{
-                            flex: 1, background: 'rgba(0,0,0,0.4)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '6px', padding: '6px 10px',
-                            color: '#ddd', fontSize: '12px', fontFamily: 'system-ui',
-                            outline: 'none', cursor: 'pointer',
-                          }}
-                        >
-                          {getProviderModels(modelProvider).map(m => (
-                            <option key={m} value={m} style={{ background: '#1a1a2e', color: '#ddd' }}>
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => {
-                            saveUserCreds(modelProvider, '', '');
-                            setApiKeyInput('');
-                            setShowApiSettings(false);
-                          }}
-                          style={{
-                            background: 'rgba(255,255,255,0.05)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: '6px', padding: '5px 14px',
-                            color: '#889', fontSize: '11px', cursor: 'pointer',
-                            fontFamily: 'system-ui',
-                          }}
-                        >清除</button>
-                        <button
-                          onClick={handleSaveCreds}
-                          disabled={!apiKeyInput.trim() || !modelInput.trim()}
-                          style={{
-                            background: (apiKeyInput.trim() && modelInput.trim())
-                              ? 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,180,0,0.2))'
-                              : 'rgba(255,255,255,0.04)',
-                            border: `1px solid ${(apiKeyInput.trim() && modelInput.trim()) ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                            borderRadius: '6px', padding: '5px 14px',
-                            color: (apiKeyInput.trim() && modelInput.trim()) ? '#FFD700' : '#555',
-                            fontSize: '11px', fontWeight: 600, cursor: (apiKeyInput.trim() && modelInput.trim()) ? 'pointer' : 'default',
-                            fontFamily: 'system-ui',
-                          }}
-                        >💾 保存</button>
-                      </div>
-                    </div>
-
-                    {/* ===== 请求 JSON 预览 + 测试连接 ===== */}
-                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <button
-                          onClick={() => setShowReqPreview(s => !s)}
-                          style={{
-                            background: 'rgba(100,180,255,0.1)', border: '1px solid rgba(100,180,255,0.2)',
-                            borderRadius: '6px', padding: '4px 10px', color: '#8cf',
-                            fontSize: '11px', cursor: 'pointer', fontFamily: 'system-ui',
-                          }}
-                        >📋 {showReqPreview ? '隐藏' : '查看'}请求 JSON</button>
-                        <button
-                          onClick={handleTestConnection}
-                          disabled={testing || !apiKeyInput.trim()}
-                          style={{
-                            background: (testing || !apiKeyInput.trim())
-                              ? 'rgba(255,255,255,0.04)'
-                              : 'rgba(72,196,128,0.15)',
-                            border: `1px solid ${(testing || !apiKeyInput.trim()) ? 'rgba(255,255,255,0.08)' : 'rgba(72,196,128,0.3)'}`,
-                            borderRadius: '6px', padding: '4px 12px',
-                            color: (testing || !apiKeyInput.trim()) ? '#555' : '#8e8',
-                            fontSize: '11px', cursor: (testing || !apiKeyInput.trim()) ? 'default' : 'pointer',
-                            fontFamily: 'system-ui', fontWeight: 600,
-                          }}
-                        >{testing ? '⏳ 测试中…' : '🔌 测试连接'}</button>
-                        <span style={{ color: '#667', fontSize: '10px' }}>
-                          (测试前会自动保存当前 Key)
-                        </span>
-                      </div>
-
-                      {/* 请求预览 */}
-                      {showReqPreview && (() => {
-                        const preview = getRequestPreview(modelProvider);
-                        const fullReq = {
-                          method: preview.method,
-                          url: preview.originUrl,
-                          targetUrl: preview.targetUrl,
-                          proxy: preview.proxy,
-                          headers: preview.headers,
-                          body: preview.body,
-                        };
-                        return (
-                          <pre style={{
-                            background: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '10px 12px',
-                            fontSize: '10.5px', fontFamily: '"Cascadia Code","Consolas",monospace',
-                            color: '#9d9', overflow: 'auto', maxHeight: 300,
-                            border: '1px solid rgba(100,180,255,0.1)', lineHeight: 1.5,
-                            whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                          }}>
-                            {JSON.stringify(fullReq, null, 2)}
-                          </pre>
-                        );
-                      })()}
-
-                      {/* 测试结果 */}
-                      {testResult && (
-                        <div style={{
-                          marginTop: 8, padding: '10px 12px', borderRadius: '8px',
-                          background: testResult.ok ? 'rgba(72,196,128,0.08)' : 'rgba(255,80,80,0.08)',
-                          border: `1px solid ${testResult.ok ? 'rgba(72,196,128,0.25)' : 'rgba(255,80,80,0.25)'}`,
-                          fontSize: '11px', fontFamily: 'system-ui', lineHeight: 1.6,
-                        }}>
-                          {testResult.ok ? (
-                            <>
-                              <div style={{ color: '#8e8', fontWeight: 600, marginBottom: 4 }}>
-                                ✅ 连接成功 (HTTP {testResult.status})
-                              </div>
-                              <div style={{ color: '#aaa' }}>
-                                回复：{testResult.content}
-                              </div>
-                              {testResult.raw && testResult.content === '(无法解析响应)' && (
-                                <details style={{ marginTop: 6 }}>
-                                  <summary style={{ color: '#e88', fontSize: '10px', cursor: 'pointer' }}>
-                                    ⚠ 无法解析，点击查看原始响应
-                                  </summary>
-                                  <pre style={{
-                                    background: 'rgba(0,0,0,0.5)', marginTop: 4, padding: '8px',
-                                    fontSize: '10px', fontFamily: 'monospace', color: '#9d9',
-                                    borderRadius: '4px', overflow: 'auto', maxHeight: 200,
-                                    whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                                  }}>{testResult.raw}</pre>
-                                </details>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <div style={{ color: '#f88', fontWeight: 600, marginBottom: 4 }}>
-                                ❌ 连接失败 {testResult.status > 0 ? `(HTTP ${testResult.status})` : ''}
-                              </div>
-                              {testResult.url && (
-                                <div style={{ color: '#779', fontSize: '10px', marginBottom: 4, wordBreak: 'break-all' }}>
-                                  请求地址：{testResult.url.slice(0, 120)}
-                                </div>
-                              )}
-                              <div style={{ color: '#e99', fontSize: '10.5px', fontFamily: '"Cascadia Code",monospace', wordBreak: 'break-all' }}>
-                                {testResult.error}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {/* CORS 代理配置 */}
-                {mode === 'api' && (
-                  <div style={{
-                    padding: '8px 10px', marginBottom: 14,
-                    background: 'rgba(100,150,255,0.04)',
-                    border: '1px solid rgba(100,150,255,0.12)',
-                    borderRadius: '8px', display: 'flex', alignItems: 'center', gap: 8,
-                    fontSize: '11px', fontFamily: 'system-ui',
-                  }}>
-                    <span style={{ color: '#889', flexShrink: 0, cursor: 'pointer' }}
-                      onClick={() => setShowCorsConfig(!showCorsConfig)}
-                    >🌐 代理 {showCorsConfig ? '▲' : '▼'}</span>
-                    {corsProxyInput ? (
-                      <span style={{
-                        color: '#4A8', fontWeight: 600, fontSize: '10px',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }} title={corsProxyInput}>
-                        ✓ 已启用 ({corsProxyInput.slice(0, 30)}...)
-                      </span>
-                    ) : (
-                      <span style={{ color: '#e66', fontSize: '10px' }}>⚠ 直连（可能被 CORS 拦截）</span>
-                    )}
-                    {showCorsConfig && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
-                        <input
-                          value={corsProxyInput}
-                          onChange={e => setCorsProxyInput(e.target.value)}
-                          placeholder="https://corsproxy.io/?"
-                          style={{
-                            flex: 1, background: 'rgba(0,0,0,0.4)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '4px', padding: '4px 6px',
-                            color: '#ddd', fontSize: '10px', fontFamily: 'monospace',
-                            outline: 'none',
-                          }}
-                        />
-                        <button
-                          onClick={() => { setCorsProxyUrl(corsProxyInput); setShowCorsConfig(false); }}
-                          style={{
-                            background: 'rgba(72,196,128,0.2)', border: '1px solid rgba(72,196,128,0.3)',
-                            borderRadius: '4px', padding: '4px 8px', color: '#8e8',
-                            fontSize: '10px', cursor: 'pointer', fontFamily: 'system-ui',
-                          }}
-                        >保存</button>
-                      </div>
-                    )}
-                  </div>
+                  <ApiSettingsPanel provider={modelProvider} onSaved={handleCredsSaved} />
                 )}
                 {wasCancelled ? (
                   <div style={{
@@ -1118,13 +955,13 @@ export default function DeliberationUI() {
               </div>
             )}
 
-            {/* 开启新推演 */}
+            {/* 开启新推演 + 带入时间折叠（横纵联动） */}
             {deliberationPhase === 'complete' && (
-              <div style={{ marginTop: 12, textAlign: 'center' }}>
+              <div style={{ marginTop: 12, display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
                 <button
                   onClick={handleNewDeliberation}
                   style={{
-                    padding: '10px 36px',
+                    padding: '10px 28px',
                     background: 'linear-gradient(135deg, rgba(255,215,0,0.22), rgba(255,180,0,0.15))',
                     border: '1px solid rgba(255,215,0,0.4)',
                     borderRadius: '10px', cursor: 'pointer',
@@ -1142,6 +979,29 @@ export default function DeliberationUI() {
                   }}
                 >
                   🔄 开启新推演
+                </button>
+                <button
+                  onClick={handleLaunchTemporal}
+                  title="用本次推演的结论启动时间折叠"
+                  style={{
+                    padding: '10px 28px',
+                    background: 'linear-gradient(135deg, rgba(68,136,255,0.22), rgba(68,100,255,0.15))',
+                    border: '1px solid rgba(68,136,255,0.45)',
+                    borderRadius: '10px', cursor: 'pointer',
+                    color: '#9bb8ff', fontSize: '14px', fontFamily: 'system-ui',
+                    fontWeight: 600, letterSpacing: '1px',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(68,136,255,0.38), rgba(68,100,255,0.28))';
+                    e.currentTarget.style.boxShadow = '0 0 30px rgba(68,136,255,0.2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(68,136,255,0.22), rgba(68,100,255,0.15))';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  ⏳ 带入时间折叠
                 </button>
               </div>
             )}
@@ -1166,10 +1026,79 @@ export default function DeliberationUI() {
             )}
           </div>
 
-          {/* 右侧：推演图谱 */}
+          {/* 右侧：推演图谱 + 节点详情 */}
           {session && (
-            <div style={{ width: 280, flexShrink: 0 }}>
-              <DeliberationGraph session={session} phase={deliberationPhase} />
+            <div style={{ width: 480, flexShrink: 0 }}>
+              <DeliberationGraph
+                session={session}
+                phase={deliberationPhase}
+                onSelectNode={setSelectedNode}
+                selectedNode={selectedNode}
+              />
+              {/* 节点详情面板 */}
+              {selectedNode && (() => {
+                if (selectedNode === 'user') {
+                  return (
+                    <div style={nodePanelStyle}>
+                      <div style={nodePanelHeadStyle}>
+                        <span style={{ color: '#FFD700', fontSize: '12px', fontWeight: 700 }}>🌟 提问者</span>
+                        <button onClick={() => setSelectedNode(null)} style={closeBtnStyle}>×</button>
+                      </div>
+                      <div style={{ color: '#ccd', fontSize: '12px', fontFamily: 'system-ui', lineHeight: 1.6 }}>
+                        {session.problem}
+                      </div>
+                    </div>
+                  );
+                }
+                const agent = tier1Agents.find(a => a.id === selectedNode);
+                if (!agent) return null;
+                const utterances = [];
+                (session.rounds || []).forEach((r, ri) => {
+                  (r.dialogues || []).forEach(d => {
+                    if (d.agentId === selectedNode) {
+                      utterances.push({ round: ri + 1, text: d.text, theme: r.theme });
+                    }
+                  });
+                });
+                return (
+                  <div style={nodePanelStyle}>
+                    <div style={{ ...nodePanelHeadStyle, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 8, marginBottom: 8 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: agent.color, display: 'inline-block' }} />
+                        <span style={{ color: agent.color || '#ccd', fontSize: '12px', fontWeight: 700 }}>{agent.name}</span>
+                      </span>
+                      <button onClick={() => setSelectedNode(null)} style={closeBtnStyle}>×</button>
+                    </div>
+                    {agent.title && (
+                      <div style={{ color: '#889', fontSize: '10px', fontFamily: 'system-ui', marginBottom: 8 }}>
+                        {agent.title}
+                      </div>
+                    )}
+                    {utterances.length === 0 ? (
+                      <div style={{ color: '#556', fontSize: '11px', fontFamily: 'system-ui', fontStyle: 'italic' }}>
+                        等待发言…
+                      </div>
+                    ) : (
+                      <div style={{ maxHeight: 200, overflow: 'auto' }}>
+                        {utterances.map((u, i) => (
+                          <div key={i} style={{
+                            marginBottom: 8, padding: '8px 10px',
+                            background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
+                            borderLeft: `2px solid ${agent.color}55`,
+                          }}>
+                            <div style={{ color: '#667', fontSize: '9px', fontFamily: 'system-ui', marginBottom: 3 }}>
+                              R{u.round} · {u.theme}
+                            </div>
+                            <div style={{ color: '#ccc', fontSize: '11.5px', fontFamily: 'system-ui', lineHeight: 1.55 }}>
+                              {u.text}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -1203,3 +1132,23 @@ function btnStyle(color) {
     color: color, fontSize: '12px', fontFamily: 'system-ui',
   };
 }
+
+// 节点详情面板样式
+const nodePanelStyle = {
+  marginTop: 10,
+  padding: '10px 12px',
+  background: 'rgba(6,6,18,0.6)',
+  border: '1px solid rgba(255,215,0,0.12)',
+  borderRadius: '10px',
+};
+
+const nodePanelHeadStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
+
+const closeBtnStyle = {
+  background: 'none', border: 'none', color: '#666',
+  cursor: 'pointer', fontSize: 16, padding: '0 4px', lineHeight: 1,
+};

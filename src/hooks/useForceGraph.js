@@ -21,8 +21,14 @@ export function useForceGraph(agents, connections, districts, options = {}) {
   const dragRef = useRef(null);
 
   // 分层索引：Tier-1/2参与完整物理，Tier-3只做锚定
-  const fullPhysicsIds = useMemo(() => agents.filter(a => a.tier <= 2).map(a => a.id), []);
-  const t3Ids = useMemo(() => agents.filter(a => a.tier === 3).map(a => a.id), []);
+  const fullPhysicsIds = useMemo(
+    () => agents.filter(a => a.tier <= 2).map(a => a.id),
+    []
+  );
+  const t3Ids = useMemo(
+    () => agents.filter(a => a.tier === 3).map(a => a.id),
+    []
+  );
 
   // 每个Agent对应的坊区锚点
   const anchors = useMemo(() => {
@@ -52,6 +58,15 @@ export function useForceGraph(agents, connections, districts, options = {}) {
       pinned: true,
       displayX: 0, displayY: 0.3, displayZ: 0,
       tier: 0,
+    };
+    // 自定义分身 custom_clone — 初始贴在 user 旁，参与完整物理（高阻尼，跟随感）
+    physicsRef.current['custom_clone'] = {
+      x: 1.5, y: 0.8, z: 0.5,
+      vx: 0, vy: 0, vz: 0,
+      pinned: false,
+      displayX: 1.5, displayY: 0.8, displayZ: 0.5,
+      tier: 1,
+      isCustomClone: true, // 标记：应用 user 跟随力
     };
   }
 
@@ -110,6 +125,25 @@ export function useForceGraph(agents, connections, districts, options = {}) {
       if (!b.pinned) { b.vx -= (dx/dist)*f*dt; b.vy -= (dy/dist)*f*dt; b.vz -= (dz/dist)*f*dt; }
     });
 
+    // ==== 自定义分身 custom_clone：跟随 user（不参与 O(n²) 排斥） ====
+    const cc = nodes['custom_clone'];
+    const userNode = nodes['user'];
+    if (cc && userNode && !cc.pinned) {
+      // 速度衰减（独立处理，因为它不在 fullPhysicsIds 中）
+      cc.vx *= 0.88; cc.vy *= 0.88; cc.vz *= 0.88;
+      // 跟随 user：维持目标偏移距离 ~1.8
+      const dx = userNode.x - cc.x, dy = (userNode.y + 0.4) - cc.y, dz = userNode.z - cc.z;
+      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) + 0.001;
+      const target = 1.8;
+      const f = 0.025 * (dist - target);
+      cc.vx += (dx/dist) * f * dt;
+      cc.vy += (dy/dist) * f * dt;
+      cc.vz += (dz/dist) * f * dt;
+      // 轻微向心力（避免飞远）
+      cc.vx += -cc.x * 0.005 * dt;
+      cc.vz += -cc.z * 0.005 * dt;
+    }
+
     // ==== 限速 + 位置更新 + 平滑显示 ====
     allIds.forEach(id => {
       const n = nodes[id];
@@ -130,6 +164,23 @@ export function useForceGraph(agents, connections, districts, options = {}) {
       n.displayY += (n.y - n.displayY) * sm;
       n.displayZ += (n.z - n.displayZ) * sm;
     });
+
+    // custom_clone 的限速 + 位置更新 + 平滑显示（独立，因为不在 allIds 中）
+    if (cc && !cc.pinned) {
+      const spd = Math.sqrt(cc.vx*cc.vx + cc.vy*cc.vy + cc.vz*cc.vz);
+      const maxSpd = 0.08;
+      if (spd > maxSpd) {
+        cc.vx = (cc.vx/spd)*maxSpd;
+        cc.vy = (cc.vy/spd)*maxSpd;
+        cc.vz = (cc.vz/spd)*maxSpd;
+      }
+      cc.x += cc.vx * dt;
+      cc.y += cc.vy * dt;
+      cc.z += cc.vz * dt;
+      cc.displayX += (cc.x - cc.displayX) * smoothSpeed;
+      cc.displayY += (cc.y - cc.displayY) * smoothSpeed;
+      cc.displayZ += (cc.z - cc.displayZ) * smoothSpeed;
+    }
   });
 
   function applyRepulsion(a, b, repForce, dt) {

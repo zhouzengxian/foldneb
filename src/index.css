@@ -101,6 +101,17 @@ html, body, #root {
   50% { opacity: 1; transform: scale(1.2); }
 }
 
+/* 时间折叠：旋转 & 淡入 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* 加载背景粒子 */
 .nebula-loading-particles {
   position: absolute;

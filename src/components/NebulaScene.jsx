@@ -24,6 +24,7 @@ import GrowingLines from './GrowingLines.jsx';
 import SparkleField from './SparkleField.jsx';
 import DistrictGround from './DistrictGround.jsx';
 import DemoEffects from './DemoController.jsx';
+import CustomCloneNode from './CustomCloneNode.jsx';
 
 // ============ 用户分身节点 — 发光球形星体 ============
 function UserNode({ getPhysPos }) {
@@ -583,9 +584,10 @@ function NebulaContent() {
         c => (c.from === mem.from && c.to === mem.to) || (c.from === mem.to && c.to === mem.from)
       );
       if (!exists) {
-        // 用户分身连线：仅好友才显示
+        // 用户分身连线：仅好友才显示（但归属线 ownership 除外，必须显示）
         const isUserConn = mem.from === 'user' || mem.to === 'user';
-        if (isUserConn) {
+        const isOwnership = mem.relations.some(r => r.source === 'ownership');
+        if (isUserConn && !isOwnership) {
           const otherId = mem.from === 'user' ? mem.to : mem.from;
           if (!friends.includes(otherId)) return; // 非好友不连线
         }
@@ -594,7 +596,14 @@ function NebulaContent() {
           to: mem.to,
           label: mem.relations[mem.relations.length - 1]?.label || '新记忆',
           interactionCount: mem.interactionCount,
+          isOwnership, // 标记归属线
         });
+      } else {
+        // 已存在的连线：补 ownership 标记
+        if (mem.relations.some(r => r.source === 'ownership') &&
+            (mem.from === 'user' && mem.to === 'custom_clone')) {
+          exists.isOwnership = true;
+        }
       }
     });
     // 也过滤静态 connections 中涉及 user 的（理论不存在，但防御性编程）
@@ -662,6 +671,9 @@ function NebulaContent() {
 
       {/* ==== 用户分身节点（中心） ==== */}
       <UserNode getPhysPos={getPos} />
+
+      {/* ==== 自定义分身 Agent（custom_clone，锚定在 user 旁） ==== */}
+      <CustomCloneNode getPhysPos={getPos} forceGraph={forceGraph} />
 
       {/* ==== 连线层 ==== */}
       <ConnectionLines

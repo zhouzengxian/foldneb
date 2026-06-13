@@ -1,8 +1,14 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import useNebulaStore from '../store/useNebulaStore';
 import { agentMoments, getTodayPosts, getAutoReply } from '../data/agentMoments';
 import { tier1Agents } from '../data/gameData';
 import { extractRelationFromComment } from '../utils/memoryCrystal';
+import {
+  generateAgentReply, isLLMAgent, setMomentsProvider,
+  isMomentsApiReady, getMomentsProvider,
+} from '../utils/agentReplyEngine';
+import { MODEL_PROVIDERS, hasValidKey, DEFAULT_PROVIDER_ID } from '../utils/modelConfig';
+import ApiSettingsPanel from './ApiSettingsPanel';
 
 // ====== iPhone 17 外观常量 ======
 const PHONE = {
@@ -172,19 +178,101 @@ function TabItem({ label, active, onClick }) {
   );
 }
 
+// ====== VIP 标识符（接入大模型的核心 Agent 专属） ======
+// 形似"会员"认证标，金色渐变 ✦ 符号
+function VipBadge({ size = 12 }) {
+  return (
+    <span title="AI · 已接入大模型" style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: size + 4, height: size + 4, borderRadius: '50%',
+      background: 'linear-gradient(135deg, #FFD700, #FF8C00)',
+      color: '#fff', fontSize: size - 2, fontWeight: 900,
+      boxShadow: '0 1px 3px rgba(255,140,0,0.45)',
+      marginLeft: 3, verticalAlign: 'middle', lineHeight: 1,
+      fontFamily: 'system-ui, sans-serif', userSelect: 'none',
+    }}>
+      ✦
+    </span>
+  );
+}
+
+// ====== 朋友圈模式切换（demo / api） ======
+function ModeToggle({ mode, onChange }) {
+  const segStyle = (active) => ({
+    flex: 1, textAlign: 'center', padding: '5px 0', fontSize: 10, fontWeight: 600,
+    color: active ? '#fff' : '#8e8e93', cursor: 'pointer', userSelect: 'none',
+    transition: 'color 0.2s',
+    fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+  });
+  return (
+    <div style={{
+      display: 'flex', margin: '8px 12px 2px',
+      background: '#e5e5ea', borderRadius: 7, padding: 2,
+    }}>
+      <div
+        onClick={() => onChange('demo')}
+        style={{
+          ...segStyle(mode === 'demo'),
+          borderRadius: 5,
+          background: mode === 'demo' ? 'linear-gradient(135deg,#5ac8fa,#007aff)' : 'transparent',
+        }}>
+        Demo 演示
+      </div>
+      <div
+        onClick={() => onChange('api')}
+        style={{
+          ...segStyle(mode === 'api'),
+          borderRadius: 5,
+          background: mode === 'api' ? 'linear-gradient(135deg,#FFD700,#FF8C00)' : 'transparent',
+        }}>
+        ✦ AI 对话
+      </div>
+    </div>
+  );
+}
+
 // ====== 朋友圈 ======
 function MomentsScreen() {
   const userProfile = useNebulaStore((s) => s.userProfile);
   const friends = useNebulaStore((s) => s.friends);
   const toggleLike = useNebulaStore((s) => s.toggleLike);
   const likes = useNebulaStore((s) => s.likes);
+  const momentsMode = useNebulaStore((s) => s.momentsMode);
+  const setMomentsMode = useNebulaStore((s) => s.setMomentsMode);
+
+  // API 模式状态
+  const [showApiSettings, setShowApiSettings] = useState(false);
+  const [apiProvider, setApiProvider] = useState(getMomentsProvider());
+
+  // 进入 API 模式 / provider 变化时同步引擎
+  // 自动选择一个已配置有效 Key 的 provider，否则用默认
+  useEffect(() => {
+    if (momentsMode !== 'api') return;
+    const current = getMomentsProvider();
+    if (!hasValidKey(current)) {
+      const withKey = MODEL_PROVIDERS.find(p => hasValidKey(p.id));
+      const chosen = withKey?.id || DEFAULT_PROVIDER_ID;
+      setMomentsProvider(chosen);
+      setApiProvider(chosen);
+    } else {
+      setApiProvider(current);
+    }
+  }, [momentsMode]);
+
+  const handleModeChange = (mode) => {
+    setMomentsMode(mode);
+    if (mode === 'api' && !isMomentsApiReady()) {
+      // 没配置 Key 时弹出设置面板
+      setShowApiSettings(true);
+    }
+  };
 
   if (!userProfile) return <LoginPrompt />;
   if (friends.length === 0) return <EmptyMoments />;
 
   const feed = [];
   friends.forEach((agentId) => {
-    const agentData = agentMoments[agentId];
+    const agentData = agentMoments[agentId] || agentMoments[agentId.replace(/_/g, '')];
     if (!agentData) return;
     const todayPosts = getTodayPosts(agentId);
     todayPosts.forEach((post) => {
@@ -198,6 +286,8 @@ function MomentsScreen() {
     });
   });
   feed.sort((a, b) => b.time.localeCompare(a.time));
+
+  const apiReady = momentsMode === 'api' && isMomentsApiReady();
 
   return (
     <div style={{ paddingBottom: 8 }}>
@@ -235,17 +325,91 @@ function MomentsScreen() {
         </div>
       </div>
 
+      {/* Demo / AI 模式切换 */}
+      <ModeToggle mode={momentsMode} onChange={handleModeChange} />
+
+      {/* API 模式状态条 */}
+      {momentsMode === 'api' && (
+        <div style={{
+          margin: '4px 12px 2px', padding: '5px 10px',
+          fontSize: 9, borderRadius: 6,
+          background: apiReady ? 'rgba(255,215,0,0.10)' : 'rgba(255,59,48,0.08)',
+          color: apiReady ? '#b8860b' : '#ff3b30',
+          fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>
+            {apiReady
+              ? `✦ AI 模式 · ${MODEL_PROVIDERS.find(p => p.id === apiProvider)?.name || ''}（核心 Agent 由大模型回复）`
+              : '✦ AI 模式 · 未配置 API Key，将降级为关键词匹配'}
+          </span>
+          <span onClick={() => setShowApiSettings(true)}
+            style={{ textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 }}>
+            {apiReady ? '设置' : '去配置'}
+          </span>
+        </div>
+      )}
+
       {/* 动态列表 */}
       {feed.map((item) => (
         <MomentCard key={item.likeKey} item={item}
+          mode={momentsMode}
           onLike={() => toggleLike(item.agentId, item.postIndex)} />
       ))}
+
+      {/* API 设置浮层（复用决策推演的设置面板，深色主题） */}
+      {showApiSettings && (
+        <ApiSettingsOverlay
+          provider={apiProvider}
+          onProviderChange={(id) => { setMomentsProvider(id); setApiProvider(id); }}
+          onClose={() => setShowApiSettings(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ====== API 设置浮层（手机内嵌的深色设置面板） ======
+function ApiSettingsOverlay({ provider, onProviderChange, onClose }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 200,
+      background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)',
+      overflow: 'auto',
+      fontFamily: 'system-ui, sans-serif',
+    }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '14px 16px 6px',
+      }}>
+        <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>
+          ✦ AI 对话 · 模型配置
+        </span>
+        <span onClick={onClose}
+          style={{ color: '#ffd700', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+          完成 ✕
+        </span>
+      </div>
+      <div style={{ padding: '0 16px 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {MODEL_PROVIDERS.map(p => (
+          <span key={p.id} onClick={() => onProviderChange(p.id)}
+            style={{
+              padding: '4px 10px', fontSize: 10, borderRadius: 12, cursor: 'pointer',
+              border: `1px solid ${provider === p.id ? p.color : 'rgba(255,255,255,0.15)'}`,
+              background: provider === p.id ? `${p.color}22` : 'transparent',
+              color: provider === p.id ? p.color : '#888',
+            }}>
+            {p.icon} {p.name}{hasValidKey(p.id) ? ' ✓' : ''}
+          </span>
+        ))}
+      </div>
+      <ApiSettingsPanel provider={provider} onSaved={() => {}} />
     </div>
   );
 }
 
 // ====== 朋友圈卡片（微信极简风） ======
-function MomentCard({ item, onLike }) {
+function MomentCard({ item, onLike, mode = 'demo' }) {
   const userProfile = useNebulaStore((s) => s.userProfile);
   const replies = useNebulaStore((s) => s.replies);
   const addReply = useNebulaStore((s) => s.addReply);
@@ -257,10 +421,13 @@ function MomentCard({ item, onLike }) {
   const [replyTyping, setReplyTyping] = useState(false);
   const [typedReply, setTypedReply] = useState('');
   const [pendingUserReply, setPendingUserReply] = useState(null);
+  const [replySource, setReplySource] = useState(null); // 'llm' | 'fallback'
+  const [replyError, setReplyError] = useState(null);
   const inputRef = useRef(null);
 
   const postKey = `${item.agentId}|${item.postIndex}`;
   const postReplies = replies[postKey] || [];
+  const llmAgent = isLLMAgent(item.agentId);
 
   const handleLike = () => {
     if (!item.liked) {
@@ -272,7 +439,7 @@ function MomentCard({ item, onLike }) {
     onLike();
   };
 
-  const submitReply = useCallback(() => {
+  const submitReply = useCallback(async () => {
     if (!replyText.trim()) return;
     const text = replyText.trim();
     const userName = userProfile?.name || '我';
@@ -281,19 +448,40 @@ function MomentCard({ item, onLike }) {
       text, user: userName,
       time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     });
-    addReply(item.agentId, item.postIndex, text, userName);
+    // 统一交给 UI 层处理 Agent 回复，store 不再自动回复（避免双重回复）
+    addReply(item.agentId, item.postIndex, text, userName, { skipAutoReply: true });
 
     const relation = extractRelationFromComment(text);
     const store = useNebulaStore.getState();
     store.addMemory('user', item.agentId, relation, Date.now(), 'social');
 
-    const fullReply = getAutoReply(item.agentId, text) || '让我想想再回答你。';
     setReplyText('');
     setShowReply(false);
     setReplyTyping(true);
     setAgentReply(null);
     setTypedReply('');
+    setReplySource(null);
+    setReplyError(null);
 
+    // 生成 Agent 回复：api 模式优先走大模型，demo 模式 / 降级走关键词匹配
+    let result;
+    if (mode === 'api') {
+      try {
+        const history = postReplies.slice(-4).map(r => ({ user: r.user, text: r.text }));
+        result = await generateAgentReply(item.agentId, text, history, item.text);
+      } catch {
+        result = { text: getAutoReply(item.agentId, text), source: 'fallback', error: '调用异常' };
+      }
+    } else {
+      result = { text: getAutoReply(item.agentId, text) || '让我想想再回答你。', source: 'fallback' };
+    }
+
+    const fullReply = result.text || '让我想想再回答你。';
+    setReplySource(result.source || 'fallback');
+    setReplyError(result.error || null);
+
+    // 模拟真人阅读思考时间（API 模式略带随机延迟更自然）
+    const delay = mode === 'api' ? 600 + Math.random() * 600 : 1200;
     setTimeout(() => {
       setPendingUserReply(null);
       setAgentReply(fullReply);
@@ -306,8 +494,8 @@ function MomentCard({ item, onLike }) {
           setReplyTyping(false);
         }
       }, 55);
-    }, 1200);
-  }, [replyText, item.agentId, item.postIndex, userProfile, addReply]);
+    }, delay);
+  }, [replyText, item.agentId, item.postIndex, item.text, userProfile, addReply, mode, postReplies]);
 
   const handleDeleteReply = (replyId) => {
     deleteReply(item.agentId, item.postIndex, replyId);
@@ -339,8 +527,10 @@ function MomentCard({ item, onLike }) {
           <div style={{
             fontSize: 13, fontWeight: 600, color: '#576b95',
             marginBottom: 3, fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+            display: 'flex', alignItems: 'center',
           }}>
             {item.name}
+            {llmAgent && <VipBadge size={11} />}
           </div>
 
           {/* 正文 */}
@@ -398,6 +588,8 @@ function MomentCard({ item, onLike }) {
                 setTypedReply('');
                 setReplyTyping(false);
                 setPendingUserReply(null);
+                setReplySource(null);
+                setReplyError(null);
               }}
                 style={{ cursor: 'pointer', userSelect: 'none' }}>
                 <svg viewBox="0 0 24 24" width="14" height="14"
@@ -448,7 +640,9 @@ function MomentCard({ item, onLike }) {
           {/* Agent 打字回复 */}
           {agentReply && (
             <div style={{
-              background: '#f3f3f5', borderRadius: 3, padding: '4px 8px',
+              background: replySource === 'llm' ? 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,140,0,0.05))' : '#f3f3f5',
+              border: replySource === 'llm' ? '0.5px solid rgba(255,215,0,0.25)' : 'none',
+              borderRadius: 3, padding: '4px 8px',
               marginTop: 4,
             }}>
               <span style={{
@@ -456,6 +650,7 @@ function MomentCard({ item, onLike }) {
                 fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
               }}>
                 {item.name}
+                {llmAgent && <VipBadge size={9} />}
               </span>
               <span style={{ fontSize: 10, color: '#aeaeb2', margin: '0 3px' }}>回复</span>
               <span style={{
@@ -466,6 +661,17 @@ function MomentCard({ item, onLike }) {
                   <>{typedReply}<span style={{ animation: 'blink 0.8s infinite', color: '#aeaeb2' }}>|</span></>
                 ) : typedReply}
               </span>
+              {/* 来源标识 */}
+              {!replyTyping && replySource === 'llm' && (
+                <div style={{ fontSize: 8, color: '#b8860b', marginTop: 2, opacity: 0.8 }}>
+                  ✦ AI 生成
+                </div>
+              )}
+              {!replyTyping && replySource === 'fallback' && replyError && (
+                <div style={{ fontSize: 8, color: '#ff3b30', marginTop: 2, opacity: 0.75 }}>
+                  ⚠ {replyError}·已降级
+                </div>
+              )}
             </div>
           )}
 
@@ -519,6 +725,7 @@ function ContactsScreen() {
         borderBottom: '0.5px solid rgba(0,0,0,0.04)',
       }}>
         已添加 {friends.length} 位好友 · 星河共 {tier1Agents.length} 位核心居民
+        · <span style={{ color: '#b8860b' }}>✦ {tier1Agents.filter(a => isLLMAgent(a.id)).length} 位已接入 AI</span>
       </div>
       {tier1Agents.map((agent) => {
         const isFr = friends.includes(agent.id);
@@ -540,14 +747,16 @@ function ContactsScreen() {
               <div style={{
                 fontSize: 12, fontWeight: 500, color: '#1d1d1f',
                 fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+                display: 'flex', alignItems: 'center',
               }}>
                 {agent.name}
+                {isLLMAgent(agent.id) && <VipBadge size={10} />}
               </div>
               <div style={{
                 fontSize: 9, color: '#aeaeb2',
                 fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
               }}>
-                {agent.title}
+                {agent.title}{isLLMAgent(agent.id) ? ' · ✦ AI' : ''}
               </div>
             </div>
             <button onClick={() => {

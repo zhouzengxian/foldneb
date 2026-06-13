@@ -3,6 +3,9 @@
 // 为思考者建造会生长的思想星河
 // ============================================================
 
+// 懒引用：函数体内才取 store 状态，避免顶层循环依赖（store 也 import 本模块）
+import useNebulaStore from '../store/useNebulaStore.js';
+
 // ==================== 工具函数 ====================
 function seededRandom(seed) {
   let s = seed;
@@ -1100,8 +1103,60 @@ export function getDeliberableAgents() {
   return [...tier1Agents, ...legacyAgents];
 }
 
+/**
+ * 把 store 中的 customClone 转换成标准 agent 结构
+ * 用懒 require 避免循环依赖（gameData ↔ store）
+ */
+function getCustomCloneAsAgent() {
+  try {
+    // 运行时读取（ES live binding 解决循环依赖）
+    const clone = useNebulaStore.getState?.().customClone;
+    if (!clone) return null;
+    return {
+      id: 'custom_clone',
+      name: clone.name,
+      emoji: clone.avatar,
+      avatar: clone.avatar,
+      title: '你的分身',
+      bio: clone.bio,
+      style: clone.style,
+      description: clone.bio,
+      position: [0, 1, 0], // 力导向会重算，仅占位
+      district: null,
+      color: '#7DF9FF',
+      tier: 1,
+      isCustom: true,
+      satellites: [],
+      tags: ['自定义', '分身'],
+      highlights: ['专属分身Agent'],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 返回全部 agent（内置 + 自定义分身，若有）
+ * 用于力导向图、搜索等需要全量节点的场景
+ */
+export function getAllAgents() {
+  const clone = getCustomCloneAsAgent();
+  return clone ? [...agents, clone] : agents;
+}
+
+/** 仅返回自定义分身 agent（或 null）— 给力导向 / 节点渲染专用 */
+export function getCustomCloneAgent() {
+  return getCustomCloneAsAgent();
+}
+
 export function getAgentById(id) {
-  return agentMap[id] || null;
+  // 内置 agentMap
+  if (agentMap[id]) return agentMap[id];
+  // 动态：自定义分身（custom_clone）
+  if (id === 'custom_clone') {
+    return getCustomCloneAsAgent();
+  }
+  return null;
 }
 
 export function getAgentsByTier(tier) {

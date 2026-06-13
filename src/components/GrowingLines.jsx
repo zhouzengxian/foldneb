@@ -21,7 +21,11 @@ export default function GrowingLines({ getPos }) {
         // 只渲染两端都是 Tier-1 agent 或 user 的记忆
         // 简单规则：两端 id 不是 't3_' 或 '_t2_' 格式的即可
         const validId = (id) => !id.startsWith('t3_') && !id.includes('_t2_');
-        return validId(mem.from) && validId(mem.to);
+        if (!validId(mem.from) || !validId(mem.to)) return false;
+        // 归属线（ownership）由 ConnectionLines 的 OwnerLine 专用渲染，这里跳过避免重叠
+        const isOwnership = mem.relations.some(r => r.source === 'ownership');
+        if (isOwnership) return false;
+        return true;
       })
       .map(([pairKey, mem]) => ({
         key: pairKey,

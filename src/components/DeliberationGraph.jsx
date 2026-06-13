@@ -1,5 +1,18 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { tier1Agents } from '../data/gameData';
+
+// 弹性回弹曲线：t∈[0,1] → 0→1.15→1.0（节点出生动画）
+function easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+// '#RRGGBB' + alpha(0~1) → '#RRGGBBAA'
+function withAlpha(hex, alpha) {
+  const a = Math.max(0, Math.min(255, Math.round(alpha * 255)));
+  return hex + a.toString(16).padStart(2, '0');
+}
 
 /**
  * DeliberationGraph — 推演过程实时图谱
@@ -10,11 +23,11 @@ import { tier1Agents } from '../data/gameData';
  * - 星空背景 + 分区卡片 + 实时动画
  */
 
-const W = 280;
+const W = 480;
 // 动态高度：根据轮数 + 洞察数自适应
-const BASE_H = 300;
-const ROUND_H = 130;
-const INSIGHT_H = 20;
+const BASE_H = 420;
+const ROUND_H = 140;
+const INSIGHT_H = 26;
 
 // 颜色体系
 const COL = {
@@ -40,14 +53,20 @@ agentColorMap.user = COL.user;
 agentColorMap.mochi = COL.mochi;
 
 // 星空粒子配置
-const STAR_COUNT = 60;
+const STAR_COUNT = 90;
 let stars = null; // 惰性初始化
 
-export default function DeliberationGraph({ session, phase }) {
+export default function DeliberationGraph({ session, phase, onSelectNode, selectedNode }) {
   const canvasRef = useRef();
   const posRef = useRef({});
   const edgeDataRef = useRef([]);
   const frameRef = useRef(0);
+  const hoverRef = useRef(null);
+  const dragNodeRef = useRef(null); // ★ 当前正在拖动的节点
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const selectedNodeRef = useRef(selectedNode);
+  selectedNodeRef.current = selectedNode;
+  const [cursor, setCursor] = useState('default');
 
   // 动态高度代入 Hook 调用前计算
   const rounds = session?.rounds || [];
@@ -101,38 +120,34 @@ export default function DeliberationGraph({ session, phase }) {
     let frame = 0;
     let animId;
 
-    // ─── 布局计算 ───
-    const USER_Y = 38;
-    const ROUND_START_Y = 75;
-    const ROUND_GAP = ROUND_H;
+    // ─── 布局：上半区=推演脉络文字卡片，下半区=图谱关系（所有节点+连线）───
+    const ROUND_START_Y = 85;
+    const ROUND_GAP = 130; // 纯文字卡片高度
 
-    // 节点目标位置
+    // 图谱关系区域（力导向 2D 布局，节点可在区域内自由游走）
+    const GRAPH_LABEL_Y = ROUND_START_Y + rounds.length * ROUND_GAP + 40;
+    const GRAPH_CARD_TOP = GRAPH_LABEL_Y - 6;
+    const GRAPH_CARD_H = 240; // ★ 加高，给 2D 布局足够空间
+    const GRAPH_AREA_TOP = GRAPH_CARD_TOP + 30;
+    const GRAPH_AREA_H = GRAPH_CARD_H - 40;
+    const GRAPH_AREA_W = W - 40;
+
+    // 所有节点（包括用户）散布在 2D 区域内（圆形分布，避免重叠）
+    const sortedAgents = [...agentIds].sort();
+    const allNodeIds = ['user', ...sortedAgents];
+    const cx = 20 + GRAPH_AREA_W / 2;
+    const cy = GRAPH_AREA_TOP + GRAPH_AREA_H / 2;
+    const radius = Math.min(GRAPH_AREA_W, GRAPH_AREA_H) * 0.35;
+
     const targets = {};
-    targets.user = { x: W / 2, y: USER_Y, pinned: true };
-
-    const placed = new Set();
-    rounds.forEach((r, ri) => {
-      const ids = (r.agentIds || []).filter(id => agentIds.includes(id));
-      const baseY = ROUND_START_Y + ri * ROUND_GAP + 25;
-      ids.forEach((id, ci) => {
-        placed.add(id);
-        const count = ids.length;
-        const spacing = Math.min(60, 200 / Math.max(count, 1));
-        targets[id] = {
-          x: W / 2 - (count - 1) * spacing / 2 + ci * spacing,
-          y: baseY,
-          pinned: false,
-        };
-      });
-    });
-    agentIds.forEach(id => {
-      if (!placed.has(id)) {
-        targets[id] = {
-          x: W / 2 + (Math.random() - 0.5) * 120,
-          y: ROUND_START_Y + rounds.length * ROUND_GAP + 20,
-          pinned: false,
-        };
-      }
+    allNodeIds.forEach((id, ci) => {
+      const angle = (ci / allNodeIds.length) * Math.PI * 2 - Math.PI / 2;
+      targets[id] = {
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+        pinned: false, // ★ 全部不固定，可自由移动
+        bornDelay: ci * 180,
+      };
     });
 
     // 初始化 / 更新物理位置
@@ -140,11 +155,12 @@ export default function DeliberationGraph({ session, phase }) {
     Object.entries(targets).forEach(([id, t]) => {
       if (!posRef.current[id]) {
         posRef.current[id] = {
-          x: t.pinned ? t.x : W / 2 + (Math.random() - 0.5) * 160,
+          x: t.pinned ? t.x : W / 2 + (Math.random() - 0.5) * 200,
           y: t.pinned ? t.y : H - 30 - Math.random() * 40,
           vx: 0, vy: 0, pinned: t.pinned,
           targetX: t.x, targetY: t.y,
-          scale: 1, targetScale: 1,
+          scale: 0, targetScale: 1,
+          bornAt: Date.now() + (t.bornDelay || 0), // ★ 按轮次延迟出生
         };
       } else {
         posRef.current[id].targetX = t.x;
@@ -169,7 +185,7 @@ export default function DeliberationGraph({ session, phase }) {
           `${ags[0]}::${ags[1]}::${ins.type}`,
           ags[0], ags[1],
           ins.type || 'insight',
-          (ins.text || '').slice(0, 14)
+          (ins.text || '').slice(0, 16)
         );
       }
     });
@@ -215,43 +231,70 @@ export default function DeliberationGraph({ session, phase }) {
       ctx.fillStyle = titleGrad;
       ctx.fillRect(0, 0, W, 60);
 
-      // ── 力导向（前 70 帧收敛）──
+      // ── 力导向（常驻运行，模拟 Obsidian 知识图谱的动态游走）──
       const ids = Object.keys(posMap);
-      if (frame < 70) {
-        for (let i = 0; i < ids.length; i++) {
-          for (let j = i + 1; j < ids.length; j++) {
-            const a = posMap[ids[i]], b = posMap[ids[j]];
-            const dx = a.x - b.x, dy = a.y - b.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) + 1;
-            const rep = 500 / (dist * dist);
-            if (!a.pinned) { a.vx += (dx / dist) * rep * 0.12; a.vy += (dy / dist) * rep * 0.12; }
-            if (!b.pinned) { b.vx -= (dx / dist) * rep * 0.12; b.vy -= (dy / dist) * rep * 0.12; }
-          }
+      const dragNode = getDragNode();
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const a = posMap[ids[i]], b = posMap[ids[j]];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+          const rep = 2200 / (dist * dist); // ★ 增强排斥力，让节点散开
+          if (!a.pinned && a !== dragNode) { a.vx += (dx / dist) * rep * 0.12; a.vy += (dy / dist) * rep * 0.12; }
+          if (!b.pinned && b !== dragNode) { b.vx -= (dx / dist) * rep * 0.12; b.vy -= (dy / dist) * rep * 0.12; }
         }
-        ids.forEach(id => {
-          const n = posMap[id];
-          if (n.pinned) return;
-          n.vx += (n.targetX - n.x) * 0.05;
-          n.vy += (n.targetY - n.y) * 0.05;
-          n.vx *= 0.82;
-          n.vy *= 0.82;
-          n.vx = Math.max(-2, Math.min(2, n.vx));
-          n.vy = Math.max(-2, Math.min(2, n.vy));
-          n.x += n.vx;
-          n.y += n.vy;
-        });
       }
 
-      // 缩放插值
+      // 连线引力（连接的节点互相吸引，形成聚类）
+      edgeDataRef.current.forEach(e => {
+        const fp = posMap[e.from], tp = posMap[e.to];
+        if (!fp || !tp) return;
+        const dx = tp.x - fp.x, dy = tp.y - fp.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+        const targetLen = 120; // 期望连线长度
+        const force = (dist - targetLen) * 0.008;
+        const fx = (dx / dist) * force, fy = (dy / dist) * force;
+        if (!fp.pinned && fp !== dragNode) { fp.vx += fx; fp.vy += fy; }
+        if (!tp.pinned && tp !== dragNode) { tp.vx -= fx; tp.vy -= fy; }
+      });
+
       ids.forEach(id => {
         const n = posMap[id];
-        n.scale += (n.targetScale - n.scale) * 0.1;
+        if (n.pinned || n === dragNode) return;
+        // 中心引力（防止节点飞出卡片）
+        n.vx += (cx - n.x) * 0.002;
+        n.vy += (cy - n.y) * 0.002;
+        n.vx *= 0.85;
+        n.vy *= 0.85;
+        n.x += n.vx;
+        n.y += n.vy;
+        // 约束在卡片区域内
+        const pad = 18;
+        n.x = Math.max(20 + pad, Math.min(20 + GRAPH_AREA_W - pad, n.x));
+        n.y = Math.max(GRAPH_AREA_TOP + pad, Math.min(GRAPH_AREA_TOP + GRAPH_AREA_H - pad, n.y));
+      });
+
+      // ── 缩放：新节点用 easeOutBack 弹性出生动画（0→1.15→1.0）──
+      const nowScale = Date.now();
+      ids.forEach(id => {
+        const n = posMap[id];
+        if (n.bornAt) {
+          const dt = (nowScale - n.bornAt) / 600; // 600ms 出生动画
+          if (dt >= 1) {
+            n.scale = 1;
+            n.bornAt = null;
+          } else {
+            n.scale = Math.max(0, easeOutBack(Math.max(0, dt)));
+          }
+        } else {
+          n.scale += (n.targetScale - n.scale) * 0.15;
+        }
       });
 
       // ── 各轮次的区域卡片 ──
       rounds.forEach((r, ri) => {
         const rTop = ROUND_START_Y + ri * ROUND_GAP;
-        const rH = 108;
+        const rH = 106; // 纯文字卡片，紧凑
 
         // 半透明背景卡片
         ctx.fillStyle = COL.card;
@@ -283,7 +326,7 @@ export default function DeliberationGraph({ session, phase }) {
         if (r.goal) {
           ctx.fillStyle = COL.textDim;
           ctx.font = '9px "PingFang SC",sans-serif';
-          const goal = r.goal.length > 22 ? r.goal.slice(0, 22) + '…' : r.goal;
+          const goal = r.goal.length > 32 ? r.goal.slice(0, 32) + '…' : r.goal;
           ctx.fillText(goal, badgeX + 34, rTop + 30);
         }
 
@@ -310,6 +353,29 @@ export default function DeliberationGraph({ session, phase }) {
           ctx.globalAlpha = 1;
         }
       });
+
+      // ── 图谱关系卡片（独立区域，只含节点和连线，不和文字重叠）──
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = 'rgba(200,180,255,0.15)';
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, 12, GRAPH_CARD_TOP, W - 24, GRAPH_CARD_H, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      // 卡片标题
+      ctx.fillStyle = '#aab';
+      ctx.font = 'bold 11px "PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('📊 图谱关系', W / 2, GRAPH_LABEL_Y + 8);
+      ctx.textAlign = 'start';
+
+      // 分隔线
+      ctx.strokeStyle = 'rgba(255,215,0,0.08)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(22, GRAPH_LABEL_Y + 16);
+      ctx.lineTo(W - 22, GRAPH_LABEL_Y + 16);
+      ctx.stroke();
 
       // ── 更新边进度 ──
       const now = Date.now();
@@ -363,22 +429,26 @@ export default function DeliberationGraph({ session, phase }) {
         ctx.lineWidth = edgeWidth;
         ctx.stroke();
 
-        // 流动粒子（仅洞见连线显示）
-        if (e.type !== 'connection' && grow > 0.3) {
-          const particleT = ((frame * 0.03) % 1 + 0.5) % 1;
+        // 流动粒子（所有连线都有，connection 类型更淡更小）
+        if (grow > 0.3) {
+          const isConn = e.type === 'connection';
+          const particleT = ((frame * (isConn ? 0.02 : 0.03)) % 1 + 0.5) % 1;
           const px = fp.x + dx * particleT;
           const py = fp.y + dy * particleT;
           const pGrow = grow < 1 ? Math.min(particleT, grow) : particleT;
           if (pGrow < grow && pGrow > 0) {
+            ctx.globalAlpha = isConn ? 0.5 : 1;
+            const pr = isConn ? 1.3 : 2;
             ctx.fillStyle = edgeColor;
             ctx.beginPath();
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.arc(px, py, pr, 0, Math.PI * 2);
             ctx.fill();
             // 光晕
-            ctx.fillStyle = edgeColor + '66';
+            ctx.globalAlpha = isConn ? 0.25 : 0.5;
             ctx.beginPath();
-            ctx.arc(px, py, 5, 0, Math.PI * 2);
+            ctx.arc(px, py, pr * 2.5, 0, Math.PI * 2);
             ctx.fill();
+            ctx.globalAlpha = 1;
           }
         }
 
@@ -404,7 +474,21 @@ export default function DeliberationGraph({ session, phase }) {
         const color = agentColorMap[id] || '#8888cc';
         const isUser = id === 'user';
         const baseR = isUser ? 12 : 8;
-        const r = baseR * (p.scale || 1);
+        const isHover = hoverRef.current === id;
+        const isSelected = selectedNodeRef.current === id;
+        const popScale = isHover ? 1.25 : (isSelected ? 1.15 : 1);
+        const r = baseR * (p.scale || 1) * popScale;
+
+        // 出生光环（bornAt 期间向外扩散）
+        if (p.bornAt) {
+          const ringT = Math.min((Date.now() - p.bornAt) / 800, 1);
+          const ringR = baseR + ringT * 22;
+          ctx.strokeStyle = withAlpha(color, (1 - ringT) * 0.8);
+          ctx.lineWidth = 2 * (1 - ringT);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, Math.max(1, ringR), 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
         // 光晕
         const glowR = isUser ? r * 3 : r * 2.2;
@@ -424,9 +508,18 @@ export default function DeliberationGraph({ session, phase }) {
         ctx.fill();
 
         // 边框
-        ctx.strokeStyle = isUser ? COL.user : color + '66';
+        ctx.strokeStyle = isUser ? COL.user : withAlpha(color, 0.4);
         ctx.lineWidth = isUser ? 2.5 : 1.5;
         ctx.stroke();
+
+        // hover / selected 高亮外圈
+        if (isHover || isSelected) {
+          ctx.strokeStyle = isSelected ? COL.titleGold : '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
         // 用户额外光环
         if (isUser) {
@@ -461,7 +554,7 @@ export default function DeliberationGraph({ session, phase }) {
 
       // ── 洞察区域 ──
       if (insights.length > 0) {
-        const insY = ROUND_START_Y + rounds.length * ROUND_GAP + 14;
+        const insY = GRAPH_CARD_TOP + GRAPH_CARD_H + 20;
         ctx.fillStyle = COL.card;
         ctx.strokeStyle = 'rgba(100,170,255,0.12)';
         roundRect(ctx, 12, insY, W - 24, Math.min(insights.length * 20 + 20, 100), 8);
@@ -484,7 +577,7 @@ export default function DeliberationGraph({ session, phase }) {
           ctx.fillStyle = '#bcc';
           ctx.font = '9px "PingFang SC",sans-serif';
           const insText = ins.text || '';
-          ctx.fillText(insText.length > 28 ? insText.slice(0, 28) + '…' : insText, 34, iy);
+          ctx.fillText(insText.length > 32 ? insText.slice(0, 32) + '…' : insText, 34, iy);
         });
       }
 
@@ -523,12 +616,92 @@ export default function DeliberationGraph({ session, phase }) {
       animId = requestAnimationFrame(tick);
     }
 
+    // ─── 命中检测 + 事件绑定 ───
+    // 用于 tick 闭包引用当前拖动节点（提前定义，确保 hoisting 安全）
+    const getDragNode = () => dragNodeRef.current;
+
+    function hitTest(mx, my) {
+      const hitIds = Object.keys(posMap);
+      for (let i = hitIds.length - 1; i >= 0; i--) {
+        const id = hitIds[i];
+        const p = posMap[id];
+        const isUser = id === 'user';
+        const baseR = isUser ? 12 : 8;
+        const r = baseR * (p.scale || 1);
+        const dx = mx - p.x, dy = my - p.y;
+        if (dx * dx + dy * dy <= (r + 5) * (r + 5)) return id;
+      }
+      return null;
+    }
+    function handleClick(e) {
+      // ★ 如果刚刚是拖动结束，不触发 click 选择
+      if (dragNodeRef.current) { dragNodeRef.current = null; return; }
+      const rect = canvas.getBoundingClientRect();
+      const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top);
+      if (hit && onSelectNode) onSelectNode(hit);
+    }
+    function handleDown(e) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const hit = hitTest(mx, my);
+      if (hit) {
+        const p = posMap[hit];
+        if (p) {
+          dragNodeRef.current = p;
+          dragOffsetRef.current = { x: mx - p.x, y: my - p.y };
+          setCursor('grabbing');
+        }
+      }
+    }
+    function handleMove(e) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      if (dragNodeRef.current) {
+        // ★ 拖动节点
+        dragNodeRef.current.x = mx - dragOffsetRef.current.x;
+        dragNodeRef.current.y = my - dragOffsetRef.current.y;
+        dragNodeRef.current.vx = 0;
+        dragNodeRef.current.vy = 0;
+      } else {
+        const hit = hitTest(mx, my);
+        hoverRef.current = hit;
+        setCursor(hit ? 'grab' : 'default');
+      }
+    }
+    function handleUp() {
+      if (dragNodeRef.current) {
+        setCursor('grab');
+        // 延迟清除，让 handleClick 知道刚拖动过
+        setTimeout(() => { dragNodeRef.current = null; }, 50);
+      }
+    }
+    function handleLeave() {
+      hoverRef.current = null;
+      dragNodeRef.current = null;
+      setCursor('default');
+    }
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('mousedown', handleDown);
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseup', handleUp);
+    canvas.addEventListener('mouseleave', handleLeave);
+
+    // 用于 tick 闭包引用当前拖动节点
+    // （已提前在命中检测区定义）
+
     animId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(animId);
+      canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('mousedown', handleDown);
+      canvas.removeEventListener('mousemove', handleMove);
+      canvas.removeEventListener('mouseup', handleUp);
+      canvas.removeEventListener('mouseleave', handleLeave);
       edgeDataRef.current = [];
     };
-  }, [session?.id]);
+  // ★ 响应 rounds/insights 增长：initDeliberation 后 addDeliberationRounds 才填充
+  //   rounds，必须重跑 effect 让 tick 闭包拿到最新布局与边数据
+  }, [session?.id, session?.rounds?.length, session?.insights?.length]);
 
   return (
     <div style={{
@@ -541,7 +714,7 @@ export default function DeliberationGraph({ session, phase }) {
     }}>
       <canvas
         ref={canvasRef}
-        style={{ width: W, height: H, display: 'block' }}
+        style={{ width: W, height: H, display: 'block', cursor }}
       />
     </div>
   );

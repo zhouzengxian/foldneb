@@ -13,7 +13,7 @@ export const MODEL_PROVIDERS = [
   },
   {
     id: 'zhipu', name: '智谱 Coding Plan', icon: '🌀', color: '#4A6CF7',
-    url: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    url: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
     models: ['glm-5.1', 'glm-4.7', 'glm-4.6', 'glm-4.6v'],
     apiKey: '',
     hint: 'Coding Plan 专属 · open.bigmodel.cn · glm-5.1',
@@ -128,6 +128,23 @@ export function deleteUserCreds(providerId) {
 /** 根据 providerId 获取配置 */
 export function getProviderById(id) {
   return MODEL_PROVIDERS.find(p => p.id === id) || MODEL_PROVIDERS.find(p => p.id === DEFAULT_PROVIDER_ID);
+}
+
+/**
+ * 大模型不可用错误：API 超时 / 网络错误 / Key 无效 / 响应无法解析。
+ * 引擎层失败时抛出，UI 必须用此错误的真实信息告知用户，
+ * 绝不静默回退到本地编造数据（"瞎说"）。
+ */
+export class LLMUnavailableError extends Error {
+  constructor(message) {
+    super(message || '大模型无应答');
+    this.name = 'LLMUnavailableError';
+  }
+}
+
+/** 从最后一次调用错误中取出可读信息，没有则给一个通用兜底 */
+export function getApiErrorMessage(fallback = '大模型无应答') {
+  return _lastApiError || fallback;
 }
 
 export function getEffectiveConfig(providerId) {

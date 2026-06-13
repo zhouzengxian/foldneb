@@ -5,7 +5,7 @@
 
 import { tier1Agents } from '../data/gameData';
 import { resolveAgentId } from './memoryCrystal';
-import { callLLMWithProvider, DEFAULT_PROVIDER_ID, getProviderById } from './modelConfig';
+import { callLLMWithProvider, DEFAULT_PROVIDER_ID, getProviderById, LLMUnavailableError, getApiErrorMessage } from './modelConfig';
 
 // ============================================================
 // 当前使用的模型（由 UI 设置）
@@ -121,12 +121,22 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.7) {
 function cleanJSON(raw) {
   if (!raw) return null;
   let t = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  const si = t.indexOf('['), ei = t.lastIndexOf(']');
-  if (si !== -1 && ei !== -1) t = t.substring(si, ei + 1);
-  if (si === -1 && t.startsWith('{')) {
-    const cei = t.lastIndexOf('}');
-    if (cei !== -1) t = t.substring(0, cei + 1);
+
+  // 先尝试直接 parse（最干净的情况）
+  try { return JSON.parse(t); } catch {}
+
+  // 找最外层结构：看 { 和 [ 哪个先出现 → 提取最外层
+  const firstBrace = t.indexOf('{'), lastBrace = t.lastIndexOf('}');
+  const firstBracket = t.indexOf('['), lastBracket = t.lastIndexOf(']');
+
+  const isObjectFirst = firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket);
+  if (isObjectFirst && lastBrace !== -1) {
+    t = t.substring(firstBrace, lastBrace + 1);
+  } else if (firstBracket !== -1 && lastBracket !== -1) {
+    t = t.substring(firstBracket, lastBracket + 1);
   }
+
+  // 清理常见 JSON 语法错误：末尾多余逗号
   t = t.replace(/,(\s*[}\]])/g, '$1').replace(/,\s*$/g, '');
   try { return JSON.parse(t); } catch { return null; }
 }
@@ -140,17 +150,22 @@ export async function analyzeProblem(problem) {
 只输出JSON，不要其他文字。`;
 
   const result = await callLLM(system, `创始人问题：${problem}`, 0.3);
-  if (!result) return getFallbackPlan(problem);
+  // API 失败时不静默回退到本地 Agent 组合（避免"瞎说"），抛错让 UI 告知用户
+  if (!result) throw new LLMUnavailableError(getApiErrorMessage('问题分析失败（无应答）'));
   
   const parsed = cleanJSON(result);
-  if (!parsed || !parsed.suggestedAgents) return getFallbackPlan(problem);
+  if (!parsed || !parsed.suggestedAgents) {
+    throw new LLMUnavailableError('问题分析返回内容无法解析（请重试或换模型）');
+  }
 
   // 验证 Agent ID
   const validAgents = parsed.suggestedAgents
     .filter(a => a.id && AGENT_EXPERTISE[a.id] && a.id !== 'mochi')
     .slice(0, 6);
 
-  if (validAgents.length < 2) return getFallbackPlan(problem);
+  if (validAgents.length < 2) {
+    throw new LLMUnavailableError('AI 选出的 Agent 全部无效（模型可能未遵循输出约定，请换模型重试）');
+  }
 
   return {
     domain: parsed.domain || '商业决策',
@@ -210,10 +225,12 @@ export async function planRounds(problem, domain, agentIds) {
 
   const prompt = `问题：${problem}\n核心域：${domain}\n参演Agent：\n${agentsInfo}`;
   const result = await callLLM(system, prompt, 0.4);
-  if (!result) return getFallbackRounds(agentIds);
+  if (!result) throw new LLMUnavailableError(getApiErrorMessage('推演规划失败（无应答）'));
 
   const parsed = cleanJSON(result);
-  if (!Array.isArray(parsed) || parsed.length < 2) return getFallbackRounds(agentIds);
+  if (!Array.isArray(parsed) || parsed.length < 2) {
+    throw new LLMUnavailableError('推演轮次规划无法解析（请重试或换模型）');
+  }
 
   // 过滤每轮中的无效Agent
   return parsed.map((r, i) => ({
@@ -261,8 +278,8 @@ export async function getAgentResponsesBatch(agentIds, context, {
           await new Promise(r => setTimeout(r, attempt * 800));
         }
         resp = await getAgentResponse(agentId, context);
-        // 只有真正的失败（无 text 或 是 fallback 沉默消息）才需要重试
-        const isSilent = !resp?.text || resp.text.includes('沉默');
+        // 真正的失败：无 text 或显式 failed 标记（不再依赖"沉默"字符串猜测）
+        const isSilent = !resp?.text || resp?.failed;
         if (resp && !isSilent) break;
       }
       results.push(resp || { agentId, text: '', agentName: getAgentInfo(agentId)?.name || agentId });
@@ -312,7 +329,14 @@ ${context.roundIndex > 0 ? `这是第${context.roundIndex + 1}轮，请在前轮
 请以${info.name}的身份回应：`;
 
   const text = await callLLM(system, prompt, 0.75);
-  return { agentId, text: text || `${info.name}沉默了片刻，似乎在深思。`, agentName: info.name };
+  // API 失败：标记失败并附上真实错误原因（不再伪装成"沉默"占位文本）
+  if (!text) {
+    return {
+      agentId, text: '', failed: true, agentName: info.name,
+      error: getApiErrorMessage(`${info.name} 无应答`),
+    };
+  }
+  return { agentId, text, agentName: info.name };
 }
 
 // ============================================================
@@ -370,10 +394,13 @@ ${roundSummaries}
 ${insightsText}`;
 
   const result = await callLLM(system, prompt, 0.5);
-  if (!result) return getFallbackReport(problem, domain, rounds, allInsights);
+  if (!result) throw new LLMUnavailableError(getApiErrorMessage('报告生成失败（无应答）'));
 
   const parsed = cleanJSON(result);
-  return parsed && parsed.coreFinding ? parsed : getFallbackReport(problem, domain, rounds, allInsights);
+  if (!parsed || !parsed.coreFinding) {
+    throw new LLMUnavailableError('推演报告无法解析（请重试或换模型）');
+  }
+  return parsed;
 }
 
 function getFallbackReport(problem, domain, rounds, allInsights) {

@@ -106,6 +106,8 @@ const useNebulaStore = create((set, get) => ({
   friends: _initialFriends,
   likes: loadFromStorage('likes', {}),
   replies: loadFromStorage('replies', {}),
+  // 朋友圈模式：'demo'（关键词匹配）/ 'api'（大模型回复）
+  momentsMode: loadFromStorage('momentsMode', 'demo'),
 
   // ========================================
   // 决策推演系统
@@ -115,6 +117,23 @@ const useNebulaStore = create((set, get) => ({
   deliberationSession: null,
   deliberationHistory: loadFromStorage('deliberationHistory', []),
   deliberationHistoryView: null,
+
+  // ========================================
+  // 时间折叠系统（纵向时间轴推演）
+  // ========================================
+  temporalOpen: false,
+  temporalPhase: 'idle', // idle|generating|writing|reviewing|anchoring|complete
+  temporalSession: null, // { profile, selves, letters, crossReviews, matrix }
+  temporalPrefill: null, // 从决策推演带入的预填 profile（被 TemporalDeliberation 吸收后清空）
+
+  // ========================================
+  // 自定义分身 Agent（custom_clone）
+  // ========================================
+  // 单个对象（业务限制：每用户仅 1 个）
+  // { name, avatar(emoji), bio, style, replyMode: 'template'|'llm'|'knowledge', imaConfig?: {clientId, apiKey} }
+  customClone: loadFromStorage('customClone', null),
+  // 创建/编辑表单显隐
+  cloneCreatorOpen: false,
 
   // ========================================
   // Demo 系统
@@ -208,6 +227,11 @@ const useNebulaStore = create((set, get) => ({
   togglePhone: () => set(s => ({ phoneOpen: !s.phoneOpen })),
   openPhone: (screen = 'moments') => set({ phoneOpen: true, phoneScreen: screen }),
   closePhone: () => set({ phoneOpen: false }),
+  // 朋友圈模式切换：'demo'（关键词匹配）/ 'api'（大模型回复）
+  setMomentsMode: (mode) => {
+    set({ momentsMode: mode });
+    saveToStorage('momentsMode', mode);
+  },
 
   loginUser: (name, avatar) => {
     const profile = { name, avatar };
@@ -274,7 +298,7 @@ const useNebulaStore = create((set, get) => ({
   },
   isLiked: (agentId, postIndex) => !!get().likes[`${agentId}|${postIndex}`],
 
-  addReply: (agentId, postIndex, text, userName = '我') => {
+  addReply: (agentId, postIndex, text, userName = '我', opts = {}) => {
     const key = `${agentId}|${postIndex}`;
     const { replies } = get();
     const newReplies = { ...replies };
@@ -284,16 +308,19 @@ const useNebulaStore = create((set, get) => ({
     set({ replies: newReplies });
     saveToStorage('replies', newReplies);
 
-    // 自动回复
-    const autoReply = getAutoReply(agentId, text);
-    if (autoReply) {
-      setTimeout(() => {
-        const r = get().replies;
-        const rList = r[key] ? [...r[key]] : [];
-        rList.push({ id: Date.now() + 1, text: autoReply, time: Date.now(), user: 'auto' });
-        set({ replies: { ...r, [key]: rList } });
-        saveToStorage('replies', { ...r, [key]: rList });
-      }, 1500);
+    // 自动回复：仅在 demo 模式（或未显式禁用）时由 store 触发
+    // api 模式下由 UI 层（PhoneApp）调用大模型统一处理，避免双重回复
+    if (!opts.skipAutoReply) {
+      const autoReply = getAutoReply(agentId, text);
+      if (autoReply) {
+        setTimeout(() => {
+          const r = get().replies;
+          const rList = r[key] ? [...r[key]] : [];
+          rList.push({ id: Date.now() + 1, text: autoReply, time: Date.now(), user: 'auto' });
+          set({ replies: { ...r, [key]: rList } });
+          saveToStorage('replies', { ...r, [key]: rList });
+        }, 1500);
+      }
     }
 
     const relationMap = {
@@ -346,8 +373,8 @@ const useNebulaStore = create((set, get) => ({
   setDeliberationPhase: (phase) => set({ deliberationPhase: phase }),
   setDeliberationSession: (session) => set({ deliberationSession: session }),
 
-  initDeliberation: (session) =>
-    set({ deliberationSession: session, deliberationPhase: 'analyzing', deliberationOpen: true }),
+  initDeliberation: (problem, analysis) =>
+    set({ deliberationSession: { problem, ...analysis }, deliberationPhase: 'analyzing', deliberationOpen: true }),
 
   addDeliberationRounds: (rounds) =>
     set((s) => ({
@@ -424,6 +451,91 @@ const useNebulaStore = create((set, get) => ({
   setDeliberationHistoryView: (view) => set({ deliberationHistoryView: view }),
   openDeliberationHistoryView: (view) => set({ deliberationHistoryView: view, deliberationOpen: true }),
   closeDeliberationHistoryView: () => set({ deliberationHistoryView: null }),
+
+  // ========================================
+  // Actions: 时间折叠
+  // ========================================
+  openTemporal: () => set({ temporalOpen: true }),
+  // 从决策推演带 profile 进入时间折叠：重置 session + 写入预填 + 打开面板
+  openTemporalWithPrefill: (prefill) => set({
+    temporalOpen: true,
+    temporalPhase: 'idle',
+    temporalSession: null,
+    temporalPrefill: prefill || null,
+  }),
+  clearTemporalPrefill: () => set({ temporalPrefill: null }),
+  closeTemporal: () => set({ temporalOpen: false, temporalPhase: 'idle', temporalSession: null, temporalPrefill: null }),
+  setTemporalPhase: (phase) => set({ temporalPhase: phase }),
+  setTemporalSession: (session) => set({ temporalSession: session }),
+  patchTemporalSession: (patch) =>
+    set((s) => ({ temporalSession: { ...(s.temporalSession || {}), ...patch } })),
+
+  // ========================================
+  // Actions: 自定义分身 Agent
+  // ========================================
+  setCloneCreatorOpen: (v) => set({ cloneCreatorOpen: v }),
+  openCloneCreator: () => set({ cloneCreatorOpen: true }),
+  closeCloneCreator: () => set({ cloneCreatorOpen: false }),
+  /**
+   * 创建专属分身（仅允许 1 个，重复创建会覆盖）
+   * config: { name, avatar, bio, style, replyMode, imaConfig? }
+   */
+  createCustomClone: (config) => {
+    const clone = {
+      name: config.name?.trim() || '我的分身',
+      avatar: config.avatar || '🪐',
+      bio: config.bio?.trim() || '探索者的思想分身',
+      style: config.style?.trim() || '深邃、好奇、善于反思',
+      replyMode: config.replyMode || 'template',
+      imaConfig: config.imaConfig || null,
+      createdAt: Date.now(),
+    };
+    set({ customClone: clone });
+    saveToStorage('customClone', clone);
+    // 建立归属关系（用 ownership source 标记，OwnerLine 专用）
+    get().addMemory('user', 'custom_clone', '我的分身', Date.now(), 'ownership');
+    return clone;
+  },
+
+  updateCustomClone: (patch) => {
+    const cur = get().customClone;
+    if (!cur) return;
+    const next = { ...cur, ...patch };
+    set({ customClone: next });
+    saveToStorage('customClone', next);
+  },
+
+  removeCustomClone: () => {
+    set({ customClone: null });
+    saveToStorage('customClone', null);
+    // 清理归属关系 memory（user ↔ custom_clone）
+    const pairKey = makePairKey('user', 'custom_clone');
+    const { memories } = get();
+    if (memories[pairKey]) {
+      const newMemories = { ...memories };
+      delete newMemories[pairKey];
+      set({ memories: newMemories });
+      saveToStorage('memories', newMemories);
+    }
+  },
+
+  /** 切换分身回复模式：'template' | 'llm' | 'knowledge' */
+  setCloneReplyMode: (mode) => {
+    const cur = get().customClone;
+    if (!cur) return;
+    const next = { ...cur, replyMode: mode };
+    set({ customClone: next });
+    saveToStorage('customClone', next);
+  },
+
+  /** 保存 ima 知识库凭据 */
+  setCloneImaConfig: (imaConfig) => {
+    const cur = get().customClone;
+    if (!cur) return;
+    const next = { ...cur, imaConfig };
+    set({ customClone: next });
+    saveToStorage('customClone', next);
+  },
 
   // ========================================
   // PhoneApp 兼容

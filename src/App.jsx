@@ -3,6 +3,7 @@ import NebulaScene from './components/NebulaScene.jsx';
 import NebulaUI from './components/NebulaUI.jsx';
 import PhoneApp from './components/PhoneApp.jsx';
 import DeliberationUI from './components/DeliberationUI.jsx';
+import TemporalDeliberation from './components/TemporalDeliberation.jsx';
 import OnboardingGuide from './components/OnboardingGuide.jsx';
 import useNebulaStore from './store/useNebulaStore.js';
 
@@ -63,6 +64,7 @@ export default function App() {
       <NebulaUI />
       <PhoneApp />
       <DeliberationUI />
+      <TemporalDeliberation />
       {!onboardingDone && <OnboardingGuide />}
     </div>
   );
