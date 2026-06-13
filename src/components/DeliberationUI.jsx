@@ -1,11 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import useNebulaStore from '../store/useNebulaStore';
 import {
-  analyzeProblem, planRounds, getAgentResponse,
+  analyzeProblem, planRounds, getAgentResponse, getAgentResponsesBatch,
   extractInsights, generateReport, getAgentInfo,
   setDeliberationProvider, getDeliberationProvider,
 } from '../utils/deliberationEngine';
-import { MODEL_PROVIDERS, hasValidKey, saveUserCreds, getUserCreds, getProviderModels, getLastApiError, getCorsProxyUrl, setCorsProxyUrl } from '../utils/modelConfig';
+import { MODEL_PROVIDERS, hasValidKey, saveUserCreds, getUserCreds, getProviderModels, getLastApiError, getCorsProxyUrl, setCorsProxyUrl, getRequestPreview, testApiConnection } from '../utils/modelConfig';
 import DeliberationGraph from './DeliberationGraph';
 import DeliberationHistory from './DeliberationHistory';
 import DEMOS from '../utils/deliberationDemos';
@@ -57,6 +57,10 @@ export default function DeliberationUI() {
   const [showCorsConfig, setShowCorsConfig] = useState(false);
   const [corsProxyInput, setCorsProxyInput] = useState(() => getCorsProxyUrl());
   const [wasCancelled, setWasCancelled] = useState(false);
+  const [showReqPreview, setShowReqPreview] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [credsTick, setCredsTick] = useState(0); // 保存后刷新预览
   const abortRef = useRef(false);
   const demoRunningRef = useRef(false);
   const modeRef = useRef('api');
@@ -114,8 +118,23 @@ export default function DeliberationUI() {
     if (!apiKeyInput.trim() || !modelInput.trim()) return;
     saveUserCreds(modelProvider, apiKeyInput.trim(), modelInput.trim());
     setDeliberationProvider(modelProvider);
+    setCredsTick(t => t + 1);
+    setTestResult(null);
     setShowApiSettings(false);
   };
+
+  // 测试连接
+  const handleTestConnection = useCallback(async () => {
+    setTesting(true);
+    setTestResult(null);
+    // 先确保最新输入已保存
+    if (apiKeyInput.trim() && modelInput.trim()) {
+      saveUserCreds(modelProvider, apiKeyInput.trim(), modelInput.trim());
+    }
+    const result = await testApiConnection(modelProvider);
+    setTestResult(result);
+    setTesting(false);
+  }, [apiKeyInput, modelInput, modelProvider]);
 
   // 同步 mode 到 ref（避免 startDeliberation 闭包过期）
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -202,19 +221,15 @@ export default function DeliberationUI() {
       const round = rounds[ri];
       addLog(`\n--- 第${ri+1}轮：${round.theme} ---`);
 
-      // 并行获取本轮所有Agent回应
+      // 并发限制获取本轮所有Agent回应（限2并发+失败重试，防止API限流）
       const previousInsights = allInsights.slice(-3).map(i => i.text).join('; ');
-      const promises = round.agentIds.map(agentId =>
-        getAgentResponse(agentId, {
-          problem: problem.trim(),
-          theme: round.theme,
-          goal: round.goal,
-          roundIndex: ri,
-          previousInsights,
-        })
-      );
-
-      const responses = await Promise.all(promises);
+      const responses = await getAgentResponsesBatch(round.agentIds, {
+        problem: problem.trim(),
+        theme: round.theme,
+        goal: round.goal,
+        roundIndex: ri,
+        previousInsights,
+      }, { concurrency: 2, retries: 1, delayMs: 500 });
       if (abortRef.current) return;
 
       // 存入 store + 逐字打出
@@ -425,7 +440,7 @@ export default function DeliberationUI() {
     <div style={{
       position: 'fixed', inset: 0, zIndex: 50,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(4,4,16,0.85)', backdropFilter: 'blur(8px)',
+      background: 'rgba(4,4,16,0.5)', backdropFilter: 'blur(4px)',
     }}>
       {/* 面板 */}
       <div style={{
@@ -658,6 +673,109 @@ export default function DeliberationUI() {
                           }}
                         >💾 保存</button>
                       </div>
+                    </div>
+
+                    {/* ===== 请求 JSON 预览 + 测试连接 ===== */}
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <button
+                          onClick={() => setShowReqPreview(s => !s)}
+                          style={{
+                            background: 'rgba(100,180,255,0.1)', border: '1px solid rgba(100,180,255,0.2)',
+                            borderRadius: '6px', padding: '4px 10px', color: '#8cf',
+                            fontSize: '11px', cursor: 'pointer', fontFamily: 'system-ui',
+                          }}
+                        >📋 {showReqPreview ? '隐藏' : '查看'}请求 JSON</button>
+                        <button
+                          onClick={handleTestConnection}
+                          disabled={testing || !apiKeyInput.trim()}
+                          style={{
+                            background: (testing || !apiKeyInput.trim())
+                              ? 'rgba(255,255,255,0.04)'
+                              : 'rgba(72,196,128,0.15)',
+                            border: `1px solid ${(testing || !apiKeyInput.trim()) ? 'rgba(255,255,255,0.08)' : 'rgba(72,196,128,0.3)'}`,
+                            borderRadius: '6px', padding: '4px 12px',
+                            color: (testing || !apiKeyInput.trim()) ? '#555' : '#8e8',
+                            fontSize: '11px', cursor: (testing || !apiKeyInput.trim()) ? 'default' : 'pointer',
+                            fontFamily: 'system-ui', fontWeight: 600,
+                          }}
+                        >{testing ? '⏳ 测试中…' : '🔌 测试连接'}</button>
+                        <span style={{ color: '#667', fontSize: '10px' }}>
+                          (测试前会自动保存当前 Key)
+                        </span>
+                      </div>
+
+                      {/* 请求预览 */}
+                      {showReqPreview && (() => {
+                        const preview = getRequestPreview(modelProvider);
+                        const fullReq = {
+                          method: preview.method,
+                          url: preview.originUrl,
+                          targetUrl: preview.targetUrl,
+                          proxy: preview.proxy,
+                          headers: preview.headers,
+                          body: preview.body,
+                        };
+                        return (
+                          <pre style={{
+                            background: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '10px 12px',
+                            fontSize: '10.5px', fontFamily: '"Cascadia Code","Consolas",monospace',
+                            color: '#9d9', overflow: 'auto', maxHeight: 300,
+                            border: '1px solid rgba(100,180,255,0.1)', lineHeight: 1.5,
+                            whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                          }}>
+                            {JSON.stringify(fullReq, null, 2)}
+                          </pre>
+                        );
+                      })()}
+
+                      {/* 测试结果 */}
+                      {testResult && (
+                        <div style={{
+                          marginTop: 8, padding: '10px 12px', borderRadius: '8px',
+                          background: testResult.ok ? 'rgba(72,196,128,0.08)' : 'rgba(255,80,80,0.08)',
+                          border: `1px solid ${testResult.ok ? 'rgba(72,196,128,0.25)' : 'rgba(255,80,80,0.25)'}`,
+                          fontSize: '11px', fontFamily: 'system-ui', lineHeight: 1.6,
+                        }}>
+                          {testResult.ok ? (
+                            <>
+                              <div style={{ color: '#8e8', fontWeight: 600, marginBottom: 4 }}>
+                                ✅ 连接成功 (HTTP {testResult.status})
+                              </div>
+                              <div style={{ color: '#aaa' }}>
+                                回复：{testResult.content}
+                              </div>
+                              {testResult.raw && testResult.content === '(无法解析响应)' && (
+                                <details style={{ marginTop: 6 }}>
+                                  <summary style={{ color: '#e88', fontSize: '10px', cursor: 'pointer' }}>
+                                    ⚠ 无法解析，点击查看原始响应
+                                  </summary>
+                                  <pre style={{
+                                    background: 'rgba(0,0,0,0.5)', marginTop: 4, padding: '8px',
+                                    fontSize: '10px', fontFamily: 'monospace', color: '#9d9',
+                                    borderRadius: '4px', overflow: 'auto', maxHeight: 200,
+                                    whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                                  }}>{testResult.raw}</pre>
+                                </details>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ color: '#f88', fontWeight: 600, marginBottom: 4 }}>
+                                ❌ 连接失败 {testResult.status > 0 ? `(HTTP ${testResult.status})` : ''}
+                              </div>
+                              {testResult.url && (
+                                <div style={{ color: '#779', fontSize: '10px', marginBottom: 4, wordBreak: 'break-all' }}>
+                                  请求地址：{testResult.url.slice(0, 120)}
+                                </div>
+                              )}
+                              <div style={{ color: '#e99', fontSize: '10.5px', fontFamily: '"Cascadia Code",monospace', wordBreak: 'break-all' }}>
+                                {testResult.error}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

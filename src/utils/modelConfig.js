@@ -5,11 +5,18 @@
 
 export const MODEL_PROVIDERS = [
   {
+    id: 'xiaomi', name: '小米 MiMo', icon: '📱', color: '#FF6900',
+    url: 'https://api.xiaomimimo.com/v1/chat/completions',
+    models: ['mimo-v2-pro', 'mimo-v2-flash'],
+    apiKey: '',
+    hint: 'OpenAI 兼容 · platform.xiaomimimo.com',
+  },
+  {
     id: 'zhipu', name: '智谱 Coding Plan', icon: '🌀', color: '#4A6CF7',
     url: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
-    models: ['glm-4.7', 'glm-4.6', 'glm-4.6v'],
+    models: ['glm-5.1', 'glm-4.7', 'glm-4.6', 'glm-4.6v'],
     apiKey: '',
-    hint: 'Coding Plan 专属 · open.bigmodel.cn',
+    hint: 'Coding Plan 专属 · open.bigmodel.cn · glm-5.1',
   },
   {
     id: 'deepseek', name: 'DeepSeek', icon: '🐋', color: '#4D6BFE',
@@ -124,13 +131,21 @@ export function getProviderById(id) {
 }
 
 export function getEffectiveConfig(providerId) {
-  const base = MODEL_PROVIDERS.find(p => p.id === providerId);
+  let base = MODEL_PROVIDERS.find(p => p.id === providerId);
   if (!base) base = MODEL_PROVIDERS.find(p => p.id === DEFAULT_PROVIDER_ID);
   const user = getUserCreds(providerId);
+
+  // 校验用户保存的 model 是否仍在可用列表中
+  // （避免旧缓存 model 名导致 API 404）
+  let model = user?.model || base.models?.[0] || '';
+  if (!base.models.includes(model)) {
+    model = base.models?.[0] || model;
+  }
+
   return {
     url: base.url,
     apiKey: user?.apiKey || base.apiKey || '',
-    model: user?.model || base.models?.[0] || '',
+    model,
     name: base.name,
   };
 }
@@ -168,16 +183,20 @@ export async function callLLMWithProvider(providerId, systemPrompt, userPrompt, 
   try {
     const isOpenAIFormat = !cfg.url.includes('minimax.chat');
 
+    // GLM-5 系列模型显式禁用 thinking mode，防止内容写入 reasoning_content
+    const needThinkingDisable = cfg.model?.startsWith('glm-5') || cfg.model?.startsWith('glm-4.7');
     let body;
     if (isOpenAIFormat) {
-      body = JSON.stringify({
+      const payload = {
         model: cfg.model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
         temperature, max_tokens: maxTokens,
-      });
+      };
+      if (needThinkingDisable) payload.thinking = { type: 'disabled' };
+      body = JSON.stringify(payload);
     } else {
       body = JSON.stringify({
         model: cfg.model,
@@ -211,7 +230,9 @@ export async function callLLMWithProvider(providerId, systemPrompt, userPrompt, 
     const d = await r.json();
     _lastApiError = null;
     if (isOpenAIFormat) {
-      return d.choices?.[0]?.message?.content || '';
+      // 兼容 GLM thinking mode：优先取 content，其次 reasoning_content
+      const msg = d.choices?.[0]?.message;
+      return msg?.content || msg?.reasoning_content || '';
     } else {
       return d.choices?.[0]?.messages?.[0]?.text || d.reply || '';
     }
@@ -226,6 +247,129 @@ export async function callLLMWithProvider(providerId, systemPrompt, userPrompt, 
     }
     console.error(_lastApiError);
     return null;
+  }
+}
+
+// ===== 请求预览 & 连接测试（调试用）=====
+
+/**
+ * 生成请求预览 JSON，供设置面板展示
+ */
+export function getRequestPreview(providerId) {
+  const cfg = getEffectiveConfig(providerId);
+  const proxy = _corsProxyUrl || getCorsProxyUrl();
+  const targetUrl = proxy ? proxy + encodeURIComponent(cfg.url) : cfg.url;
+  const isOpenAIFormat = !cfg.url.includes('minimax.chat');
+
+  const body = isOpenAIFormat
+    ? {
+        model: cfg.model,
+        messages: [
+          { role: 'system', content: '你是墨池，决策推演主持人。' },
+          { role: 'user', content: '你好，测试连接' },
+        ],
+        temperature: 0.3,
+        max_tokens: 100,
+        ...(cfg.model?.startsWith('glm-5') || cfg.model?.startsWith('glm-4.7')
+          ? { thinking: { type: 'disabled' } }
+          : {}),
+      }
+    : {
+        model: cfg.model,
+        messages: [
+          { role: 'system', content: '你是墨池，决策推演主持人。' },
+          { role: 'user', content: '你好，测试连接' },
+        ],
+        temperature: 0.3,
+        max_tokens: 100,
+        reply_constraints: { sender_type: 'BOT', sender_name: '助手' },
+      };
+
+  // API Key 脱敏
+  const maskedKey = cfg.apiKey
+    ? cfg.apiKey.length > 12
+      ? cfg.apiKey.slice(0, 6) + '****' + cfg.apiKey.slice(-4)
+      : '(太短)'
+    : '(未设置)';
+
+  return {
+    method: 'POST',
+    originUrl: cfg.url,
+    targetUrl,
+    proxy: proxy || '(无代理，直连)',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${maskedKey}`,
+    },
+    body,
+  };
+}
+
+/**
+ * 测试 API 连接 — 发送一条最小请求，返回结果
+ */
+export async function testApiConnection(providerId) {
+  const cfg = getEffectiveConfig(providerId);
+  if (!cfg.apiKey || cfg.apiKey.length < 10) {
+    return { ok: false, status: -1, error: 'API Key 未设置或长度不足' };
+  }
+
+  const proxy = _corsProxyUrl || getCorsProxyUrl();
+  const targetUrl = proxy ? proxy + encodeURIComponent(cfg.url) : cfg.url;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const r = await fetch(targetUrl, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cfg.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        messages: [{ role: 'user', content: '你好，请回复"连接成功"' }],
+        temperature: 0.3,
+        max_tokens: 50,
+        ...(cfg.model?.startsWith('glm-5') || cfg.model?.startsWith('glm-4.7')
+          ? { thinking: { type: 'disabled' } }
+          : {}),
+      }),
+    });
+
+    clearTimeout(timeout);
+    const respText = await r.text();
+
+    if (!r.ok) {
+      return {
+        ok: false,
+        status: r.status,
+        error: respText.slice(0, 500),
+        url: targetUrl,
+      };
+    }
+
+    let content;
+    try {
+      const d = JSON.parse(respText);
+      const msg = d.choices?.[0]?.message;
+      content =
+        msg?.content ||
+        msg?.reasoning_content ||
+        d.choices?.[0]?.messages?.[0]?.text ||
+        d.reply ||
+        '(无法解析响应)';
+      return { ok: true, status: r.status, content, raw: respText.slice(0, 500) };
+    } catch {
+      return { ok: true, status: r.status, content: respText.slice(0, 200) };
+    }
+  } catch (e) {
+    clearTimeout(timeout);
+    if (e.name === 'AbortError') {
+      return { ok: false, status: -1, error: '请求超时 (15s)', url: targetUrl };
+    }
+    return { ok: false, status: -1, error: `${e.name}: ${e.message}`, url: targetUrl };
   }
 }
 

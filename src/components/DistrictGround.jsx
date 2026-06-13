@@ -1,7 +1,7 @@
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Text, Billboard } from '@react-three/drei';
+import TextSprite from './TextSprite.jsx';
 
 /**
  * 星系星云地面 — 由颜色颗粒组成的模糊星云替代明显圆圈
@@ -122,19 +122,15 @@ export default function DistrictGround({ district }) {
       </points>
 
       {/* 坊区名牌 */}
-      <Billboard position={[0, 1.3, 0]}>
-        <Text
-          fontSize={0.15}
-          color={lanternColor}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.03}
-          outlineColor="#0a0a1a"
-          fontStyle="bold"
-        >
-          {district.name}
-        </Text>
-      </Billboard>
+      <TextSprite
+        position={[0, 1.3, 0]}
+        fontSize={16}
+        color={lanternColor}
+        outlineWidth={0.03}
+        outlineColor="#0a0a1a"
+      >
+        {district.name}
+      </TextSprite>
     </group>
   );
 }

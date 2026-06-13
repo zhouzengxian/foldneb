@@ -258,30 +258,12 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      {/* 名字标签 */}
-      <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, -0.9, 0]}>
-        <Text
-          fontSize={0.22}
-          color="#e8f0ff"
-          anchorX="center"
-          anchorY="top"
-          outlineWidth={0.03}
-          outlineColor="#000000"
-        >
+      {/* 名字 + 头衔标签（参考 wen-agent-city 的 Billboard + Text 方案） */}
+      <Billboard position={[0, 0.85, 0]}>
+        <Text fontSize={0.14} color="#e8f0ff" anchorX="center" anchorY="middle" outlineWidth={0.03} outlineColor="#000000">
           {agent.emoji} {agent.name}
         </Text>
-      </Billboard>
-
-      {/* 头衔标签 */}
-      <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, -1.2, 0]}>
-        <Text
-          fontSize={0.15}
-          color={agent.color}
-          anchorX="center"
-          anchorY="top"
-          outlineWidth={0.02}
-          outlineColor="#000000"
-        >
+        <Text position={[0, -0.22, 0]} fontSize={0.08} color={agent.color} anchorX="center" anchorY="middle" outlineWidth={0.02} outlineColor="#000000">
           {agent.title}
         </Text>
       </Billboard>

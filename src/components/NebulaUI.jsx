@@ -21,7 +21,10 @@ export default function NebulaUI() {
 
   const [searchResults, setSearchResults] = useState([]);
   const [obsidianStatus, setObsidianStatus] = useState('');
-  const [expandedDistrict, setExpandedDistrict] = useState(null);
+  const [showDistrictPanel, setShowDistrictPanel] = useState(false);
+  const [selectedDistrict, setSelectedDistrict] = useState(null);
+  const runDemo = useNebulaStore((s) => s.runDemo);
+  const demoActive = useNebulaStore((s) => s.demoActive);
 
   // 搜索过滤
   useEffect(() => {
@@ -74,104 +77,86 @@ export default function NebulaUI() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }}>
-      {/* ========== 左上 Logo ========== */}
-      <div style={{ position: 'absolute', top: 20, left: 24, pointerEvents: 'auto' }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: '#FFD700', letterSpacing: '0.08em' }}>
-          FoldNeb 折叠星云
+      {/* ========== 左上 Logo + 工具栏 ========== */}
+      <div style={{ position: 'absolute', top: 24, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{
+            fontSize: 20, fontWeight: 700, color: '#FFD700', letterSpacing: '0.12em',
+            textShadow: '0 0 24px rgba(255,215,0,0.4), 0 2px 4px rgba(0,0,0,0.6)',
+          }}>FoldNeb 折叠星云</div>
+          <div style={{ fontSize: 10, color: 'rgba(136,153,204,0.5)', letterSpacing: '0.15em', marginTop: 3 }}>
+            125位思想者 · 13个星系
+          </div>
+          <div style={{ width: 140, height: 1, background: 'linear-gradient(90deg, rgba(255,215,0,0.4), transparent)', marginTop: 6 }} />
         </div>
-        <div style={{ fontSize: 11, color: '#8899bb', opacity: 0.6, marginTop: 2 }}>
-          125位思想者 · 13个星系 · 会生长的知识星河
-        </div>
-      </div>
-
-      {/* ========== 左侧 13 星系面板 ========== */}
-      <div style={{ position: 'absolute', top: 100, left: 24, width: 200, maxHeight: 'calc(100vh - 130px)', overflowY: 'auto', pointerEvents: 'auto', background: 'rgba(5,5,32,0.6)', backdropFilter: 'blur(16px)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)', padding: '12px 0' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#FFD700', padding: '0 14px 10px', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between' }}>
-          <span>🌌 十三星系</span>
-          <span style={{ opacity: 0.5, fontSize: 11 }}>{userFriends.length}/125</span>
-        </div>
-        {districts.map((d) => {
-          const isExpanded = expandedDistrict === d.id;
-          const districtAgents = tier1Agents.filter((a) => a.district === d.id);
-          return (
-            <div key={d.id}>
-              <button
-                onClick={() => {
-                  setExpandedDistrict(isExpanded ? null : d.id);
-                  setDistrictFilter(districtFilter === d.id ? null : d.id);
-                }}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 14px', border: 'none',
-                  background: isExpanded || districtFilter === d.id
-                    ? `${d.color}28`
-                    : `${d.color}12`,
-                  borderLeft: (isExpanded || districtFilter === d.id) ? `3px solid ${d.color}` : `3px solid ${d.color}60`,
-                  color: isExpanded || districtFilter === d.id ? d.color : `${d.color}cc`,
-                  fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                  transition: 'all 0.2s', fontWeight: isExpanded ? 600 : 400,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = `${d.color}28`; e.currentTarget.style.color = d.color; }}
-                onMouseLeave={(e) => { if (!isExpanded && districtFilter !== d.id) { e.currentTarget.style.background = `${d.color}12`; e.currentTarget.style.color = `${d.color}cc`; } }}
-              >
-                <span style={{ fontSize: 10, opacity: 0.6, width: 16, textAlign: 'center' }}>
-                  {isExpanded ? '▼' : '▶'}
-                </span>
-                <span style={{ flex: 1 }}>{d.name}</span>
-                <span style={{ fontSize: 10, opacity: 0.5 }}>{districtAgents.length}</span>
-              </button>
-              {isExpanded && (
-                <div style={{ padding: '4px 0 4px 0' }}>
-                  {districtAgents.map((a) => (
-                    <button key={a.id}
-                      onClick={() => { focusAgent(a.id); selectAgent(a.id); }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '5px 14px 5px 32px', border: 'none',
-                        background: selectedAgent === a.id ? `${a.color}1a` : 'transparent',
-                        borderLeft: selectedAgent === a.id ? `2px solid ${a.color}` : '2px solid transparent',
-                        color: selectedAgent === a.id ? a.color : '#aabbcc',
-                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = `${a.color}10`; e.currentTarget.style.color = a.color; }}
-                      onMouseLeave={(e) => { if (selectedAgent !== a.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#aabbcc'; } }}
-                    >
-                      <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>{a.emoji}</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                    </button>
+        {!demoActive && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {runDemo && (
+              <button onClick={runDemo} style={{
+                padding: '7px 16px', borderRadius: 8,
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,215,0,0.08))',
+                border: '1px solid rgba(255,215,0,0.4)', backdropFilter: 'blur(8px)',
+                color: '#FFD700', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                fontFamily: 'inherit', letterSpacing: '0.05em', transition: 'all 0.2s',
+              }}>✨ 星河巡游</button>
+            )}
+            <button onClick={() => { setShowDistrictPanel(!showDistrictPanel); if (showDistrictPanel) setSelectedDistrict(null); }} style={{
+              padding: '7px 14px', borderRadius: 8,
+              background: showDistrictPanel ? 'linear-gradient(135deg, rgba(136,153,204,0.35), rgba(136,153,204,0.2))' : 'linear-gradient(135deg, rgba(136,153,204,0.15), rgba(136,153,204,0.05))',
+              border: '1px solid rgba(136,153,204,0.4)', backdropFilter: 'blur(8px)',
+              color: '#c0cde0', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s',
+            }}>🗂️ 十三星系</button>
+            <div style={{ position: 'relative' }}>
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索思想者..." style={{
+                width: 150, padding: '7px 12px 7px 34px', borderRadius: 8,
+                border: '1px solid rgba(136,153,204,0.3)', background: 'rgba(10,8,20,0.7)', backdropFilter: 'blur(8px)',
+                color: '#e8f0ff', fontSize: 12, outline: 'none', fontFamily: 'inherit',
+              }} />
+              <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, opacity: 0.4 }} viewBox="0 0 24 24" fill="none" stroke="#e8f0ff" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              {searchResults.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: 'rgba(10,8,20,0.95)', backdropFilter: 'blur(12px)', borderRadius: 8, border: '1px solid rgba(136,153,204,0.3)', overflow: 'hidden', maxHeight: 280, overflowY: 'auto' }}>
+                  {searchResults.slice(0, 12).map((a) => (
+                    <div key={a.id} onClick={() => { focusAgent(a.id); selectAgent(a.id); setSearchQuery(''); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: '#d0d8e8', borderBottom: '1px solid rgba(255,255,255,0.04)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(136,153,204,0.15)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <span style={{ fontSize: 14 }}>{a.emoji}</span>
+                      <span style={{ color: a.color }}>{a.name}</span>
+                      <span style={{ opacity: 0.5, fontSize: 10, marginLeft: 'auto' }}>{a.title}</span>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
-          );
-        })}
-        <div style={{ margin: '8px 14px 0', padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ fontSize: 10, color: '#8899aa', marginBottom: 2 }}>星河记忆总量</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#FFD700' }}>{totalMemories}</div>
-        </div>
-      </div>
-
-      {/* ========== 顶部搜索栏 ========== */}
-      <div style={{ position: 'absolute', top: 22, left: 250, right: 24, pointerEvents: 'auto' }}>
-        <div style={{ position: 'relative', maxWidth: 360 }}>
-          <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索思想者..." style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(5,5,32,0.75)', backdropFilter: 'blur(16px)', color: '#e8f0ff', fontSize: 14, outline: 'none', fontFamily: 'inherit' }} />
-          <svg style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, opacity: 0.4 }} viewBox="0 0 24 24" fill="none" stroke="#e8f0ff" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          {searchResults.length > 0 && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, background: 'rgba(5,5,32,0.9)', backdropFilter: 'blur(20px)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', maxHeight: 280, overflowY: 'auto' }}>
-              {searchResults.slice(0, 12).map((a) => (
-                <div key={a.id} onClick={() => { focusAgent(a.id); selectAgent(a.id); setSearchQuery(''); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', cursor: 'pointer', color: '#e8f0ff', fontSize: 14, borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,215,0,0.08)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                  <span style={{ fontSize: 18 }}>{a.emoji}</span>
-                  <span>{a.name}</span>
-                  <span style={{ color: a.color, opacity: 0.7, fontSize: 12 }}>{a.title}</span>
+            <span style={{ fontSize: 10, color: 'rgba(136,153,204,0.3)' }}>单击星体 · 拖拽旋转</span>
+          </div>
+        )}
+        {showDistrictPanel && !demoActive && (
+          <div style={{ marginTop: 8, background: 'rgba(10,8,20,0.85)', border: '1px solid rgba(136,153,204,0.25)', borderRadius: 10, backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: 5, padding: 10 }}>
+            {districts.map((d) => {
+              const cnt = tier1Agents.filter((a) => a.district === d.id).length;
+              return (
+                <div key={d.id} onClick={() => { const nid = selectedDistrict === d.id ? null : d.id; setSelectedDistrict(nid); setDistrictFilter(nid); }} style={{ padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', color: '#d0d8e8', background: selectedDistrict === d.id ? `${d.color}30` : 'rgba(136,153,204,0.08)', border: `1px solid ${selectedDistrict === d.id ? d.color + '80' : 'transparent'}`, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 5 }} onMouseEnter={(e) => e.currentTarget.style.background = `${d.color}28`} onMouseLeave={(e) => { if (selectedDistrict !== d.id) e.currentTarget.style.background = 'rgba(136,153,204,0.08)'; }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: d.color, boxShadow: `0 0 6px ${d.color}` }} />
+                  {d.name}
+                  <span style={{ fontSize: 9, opacity: 0.4 }}>{cnt}</span>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
+        )}
+        {selectedDistrict && showDistrictPanel && !demoActive && (
+          <div style={{ marginTop: 6, padding: 8, background: 'rgba(10,8,20,0.85)', border: '1px solid rgba(136,153,204,0.25)', borderRadius: 10, backdropFilter: 'blur(12px)', maxHeight: 200, overflowY: 'auto', maxWidth: 320 }}>
+            {tier1Agents.filter((a) => a.district === selectedDistrict).map((a) => (
+              <div key={a.id} onClick={() => { focusAgent(a.id); selectAgent(a.id); }} style={{ padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#c0cde0', borderRadius: 4, background: selectedAgent === a.id ? `${a.color}15` : 'transparent' }} onMouseEnter={(e) => e.currentTarget.style.background = `${a.color}12`} onMouseLeave={(e) => { if (selectedAgent !== a.id) e.currentTarget.style.background = 'transparent'; }}>
+                <span style={{ fontSize: 13 }}>{a.emoji}</span>
+                <span style={{ color: a.color, fontWeight: 600 }}>{a.name}</span>
+                <span style={{ opacity: 0.4, fontSize: 10, marginLeft: 'auto' }}>{a.title}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: 8, display: 'flex', gap: 12, fontSize: 10, color: 'rgba(136,153,204,0.35)' }}>
+          <span>✦ {tier1Agents.length}位思想者</span>
+          <span>✦ 关注 {userFriends.length}</span>
+          {totalMemories > 0 && <span>✦ 记忆 {totalMemories}</span>}
         </div>
       </div>
 

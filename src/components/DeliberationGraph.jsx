@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { tier1Agents } from '../data/gameData';
 
 /**
@@ -49,6 +49,23 @@ export default function DeliberationGraph({ session, phase }) {
   const edgeDataRef = useRef([]);
   const frameRef = useRef(0);
 
+  // 动态高度代入 Hook 调用前计算
+  const rounds = session?.rounds || [];
+  const insights = session?.insights || [];
+  const H = Math.max(300, BASE_H + rounds.length * ROUND_H + insights.filter(i => i.type).length * 8);
+
+  // ★ 推演过程中 rounds/insights 增长时，同步 Canvas bitmap 尺寸，防止 CSS height
+  //    被 React 更新但 bitmap 没跟上 → 浏览器拉伸导致字体变形
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+  }, [H]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -65,6 +82,8 @@ export default function DeliberationGraph({ session, phase }) {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = W * dpr;
     canvas.height = H * dpr;
+    // ★ 同时设置 CSS 尺寸，防止 Canvas bitmap 与 CSS 尺寸不匹配导致文字变形
+    canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     ctx.scale(dpr, dpr);
 
@@ -510,11 +529,6 @@ export default function DeliberationGraph({ session, phase }) {
       edgeDataRef.current = [];
     };
   }, [session?.id]);
-
-  // 动态高度以适应 canvas
-  const rounds = session?.rounds || [];
-  const insights = session?.insights || [];
-  const H = Math.max(300, BASE_H + rounds.length * ROUND_H + insights.filter(i => i.type).length * 8);
 
   return (
     <div style={{

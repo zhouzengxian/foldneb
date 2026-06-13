@@ -163,28 +163,11 @@ function UserNode({ getPhysPos }) {
       </points>
 
       {/* 名字标签 */}
-      <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, -1.4, 0]}>
-        <Text
-          fontSize={0.28}
-          color={color}
-          anchorX="center"
-          anchorY="top"
-          outlineWidth={0.04}
-          outlineColor="#000000"
-          fontWeight={700}
-        >
+      <Billboard position={[0, 1.1, 0]}>
+        <Text fontSize={0.18} color={color} anchorX="center" anchorY="middle" outlineWidth={0.03} outlineColor="#000000">
           {emoji} {name}
         </Text>
-      </Billboard>
-      <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, -1.75, 0]}>
-        <Text
-          fontSize={0.14}
-          color="#aabbcc"
-          anchorX="center"
-          anchorY="top"
-          outlineWidth={0.02}
-          outlineColor="#000000"
-        >
+        <Text position={[0, -0.22, 0]} fontSize={0.1} color="#aabbcc" anchorX="center" anchorY="middle" outlineWidth={0.02} outlineColor="#000000">
           你的分身
         </Text>
       </Billboard>
@@ -320,6 +303,30 @@ function CameraController({ getPos }) {
   const autoRotate = useNebulaStore((s) => s.autoRotate);
   const cameraTarget = useNebulaStore((s) => s.cameraTarget);
   const focusAgentId = useNebulaStore((s) => s.focusAgentId);
+  const prevFocusRef = useRef(null);
+
+  // focusAgentId 变化时，gsap 推近镜头
+  useEffect(() => {
+    if (!focusAgentId || !getPos) return;
+    if (prevFocusRef.current === focusAgentId) return;
+    prevFocusRef.current = focusAgentId;
+
+    const [tx, ty, tz] = getPos(focusAgentId);
+    if (isNaN(tx)) return;
+
+    // 计算推近目标：从当前位置朝 agent 方向推近
+    const dir = new THREE.Vector3(tx, ty, tz).sub(camera.position).normalize();
+    const targetPos = new THREE.Vector3(tx, ty, tz).sub(dir.multiplyScalar(8));
+
+    gsap.to(camera.position, {
+      x: targetPos.x,
+      y: targetPos.y + 3,
+      z: targetPos.z,
+      duration: 1.5,
+      ease: 'power2.inOut',
+      onUpdate: () => controlsRef.current?.update(),
+    });
+  }, [focusAgentId, getPos, camera]);
 
   useFrame(() => {
     if (controlsRef.current) {
@@ -440,6 +447,11 @@ function NebulaContent() {
     });
   }, [demoActive]);
 
+  // 注册 runDemo 到 store，供 NebulaUI 调用
+  useEffect(() => {
+    useNebulaStore.setState({ runDemo });
+  }, [runDemo]);
+
   // 动态连线（从 memories 推导，用户连线仅显示好友）
   const dynamicConns = useMemo(() => {
     const conns = [...connections];
@@ -539,43 +551,6 @@ function NebulaContent() {
         getPos={getPos}
         memories={memories}
       />
-
-      {/* ==== Demo 按钮 ==== */}
-      <Html
-        fullscreen
-        style={{
-          position: 'fixed',
-          bottom: 32,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          pointerEvents: 'none',
-          zIndex: 100,
-        }}
-      >
-        <div style={{ pointerEvents: 'auto' }}>
-          <button
-            onClick={runDemo}
-            disabled={demoActive}
-            style={{
-              padding: '12px 28px',
-              borderRadius: 14,
-              background: demoActive
-                ? 'rgba(255,215,0,0.1)'
-                : 'rgba(255,215,0,0.15)',
-              border: `1px solid ${demoActive ? 'rgba(255,215,0,0.2)' : 'rgba(255,215,0,0.4)'}`,
-              backdropFilter: 'blur(20px)',
-              color: demoActive ? '#664400' : '#FFD700',
-              fontSize: 15,
-              fontWeight: 600,
-              cursor: demoActive ? 'default' : 'pointer',
-              fontFamily: 'inherit',
-              letterSpacing: '0.05em',
-            }}
-          >
-            {demoActive ? '✨ 星河巡游中...' : '✨ 启动星河巡游'}
-          </button>
-        </div>
-      </Html>
 
       {/* ==== 相机 ==== */}
       <CameraController getPos={getPos} />

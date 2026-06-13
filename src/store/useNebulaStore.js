@@ -64,6 +64,7 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   demoActive: false,
   demoHighlight: null,
+  runDemo: null,
 
   // ========================================
   // 新手引导

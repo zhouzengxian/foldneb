@@ -239,6 +239,47 @@ function getFallbackRounds(agentIds) {
 // ============================================================
 // 三、获取Agent推演回应
 // ============================================================
+
+/** 并发限制 + 自动重试：防止 API 限流导致部分 Agent 沉默 */
+export async function getAgentResponsesBatch(agentIds, context, {
+  concurrency = 2,
+  retries = 1,
+  delayMs = 500,
+} = {}) {
+  const results = [];
+  const queue = [...agentIds];
+
+  async function worker() {
+    while (queue.length > 0) {
+      const agentId = queue.shift();
+      if (!agentId) break;
+
+      let resp = null;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        if (attempt > 0) {
+          // 重试前等待递增时间
+          await new Promise(r => setTimeout(r, attempt * 800));
+        }
+        resp = await getAgentResponse(agentId, context);
+        // 只有真正的失败（无 text 或 是 fallback 沉默消息）才需要重试
+        const isSilent = !resp?.text || resp.text.includes('沉默');
+        if (resp && !isSilent) break;
+      }
+      results.push(resp || { agentId, text: '', agentName: getAgentInfo(agentId)?.name || agentId });
+    }
+  }
+
+  // 启动 concurrency 个 worker
+  const workers = Array(Math.min(concurrency, queue.length))
+    .fill(null)
+    .map(() => worker());
+  await Promise.all(workers);
+
+  // 按原始顺序排列结果
+  const ordered = agentIds.map(id => results.find(r => r.agentId === id)).filter(Boolean);
+  return ordered;
+}
+
 export async function getAgentResponse(agentId, context) {
   const info = getAgentInfo(agentId);
   if (!info) return { agentId, text: '（暂无回应）' };
