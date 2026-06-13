@@ -61,6 +61,40 @@ export default function DeliberationUI() {
   const modeRef = useRef('api');
   const runDemoRef = useRef(null);
 
+  // ===== 打字机效果 =====
+  const [typedTexts, setTypedTexts] = useState({});
+  const typeTimers = useRef({});
+
+  // 逐字打字，返回 Promise（完成后 resolve）
+  const typeText = useCallback(async (key, fullText, speed = 30) => {
+    if (!fullText) return;
+    // 清除该 key 之前的定时器
+    if (typeTimers.current[key]) {
+      clearInterval(typeTimers.current[key]);
+    }
+    // 先显示空，再逐字显示
+    setTypedTexts(prev => ({ ...prev, [key]: '' }));
+    let pos = 0;
+    await new Promise(resolve => {
+      typeTimers.current[key] = setInterval(() => {
+        pos++;
+        setTypedTexts(prev => ({ ...prev, [key]: fullText.slice(0, pos) }));
+        if (pos >= fullText.length) {
+          clearInterval(typeTimers.current[key]);
+          delete typeTimers.current[key];
+          resolve();
+        }
+      }, speed);
+    });
+  }, []);
+
+  // 清理打字状态（组件卸载或重置时）
+  const clearTyping = useCallback(() => {
+    Object.values(typeTimers.current).forEach(t => clearInterval(t));
+    typeTimers.current = {};
+    setTypedTexts({});
+  }, []);
+
   // 切换模型时同步到引擎，缺少 key 则弹出配置
   const handleModelChange = (id) => {
     setModelProviderLocal(id);
@@ -92,9 +126,10 @@ export default function DeliberationUI() {
       setProblem('');
       setError(null);
       setLogs([]);
+      clearTyping();
       abortRef.current = false;
     }
-  }, [deliberationPhase]);
+  }, [deliberationPhase, clearTyping]);
 
   const addLog = useCallback((msg, type = 'info') => {
     setLogs(prev => [...prev, { text: msg, type, time: Date.now() }]);
@@ -113,6 +148,14 @@ export default function DeliberationUI() {
     abortRef.current = false;
     setError(null);
     setLogs([]);
+    clearTyping();
+
+    // API 模式预检查
+    if (modeRef.current === 'api' && !hasValidKey(modelProvider)) {
+      const p = MODEL_PROVIDERS.find(x => x.id === modelProvider);
+      setError(`请先配置 ${p?.name || modelProvider} 的 API Key。点击顶部 ⚙️ 按钮或切换 🎬 Demo 模式。`);
+      return;
+    }
 
     setDeliberationPhase('analyzing');
     addLog('🔍 墨池正在分析你的问题…');
@@ -174,13 +217,17 @@ export default function DeliberationUI() {
       const responses = await Promise.all(promises);
       if (abortRef.current) return;
 
-      // 存入 store
+      // 存入 store + 逐字打出
       const dialogues = [];
       let failCount = 0;
       for (const resp of responses) {
+        if (abortRef.current) return;
         if (resp && resp.text) {
+          const key = `${ri}-${resp.agentId}`;
           dialogues.push(resp);
           addDeliberationDialogue(ri, resp);
+          // 逐字打字效果
+          await typeText(key, resp.text, 25);
           addLog(`  ${resp.agentName || resp.agentId}: ${resp.text.slice(0, 60)}…`);
           // 记忆提取
           const relationLabel = round.theme.slice(0, 6);
@@ -298,9 +345,11 @@ export default function DeliberationUI() {
 
       for (const d of round.dialogues) {
         if (abortRef.current) return;
+        const key = `${ri}-${d.agentId}`;
         addDeliberationDialogue(ri, d);
+        // 逐字打字效果（Demo 稍快一些）
+        await typeText(key, d.text, 35);
         addLog(`  ${d.agentName || d.agentId}: ${d.text.slice(0, 60)}…`);
-        await sleep(800);
       }
 
       if (round.insights && round.insights.length > 0) {
@@ -655,7 +704,23 @@ export default function DeliberationUI() {
                     outline: 'none', lineHeight: 1.6,
                   }}
                 />
-                {error && <p style={{ color: '#f66', fontSize: '12px', margin: '8px 0' }}>{error}</p>}
+                {error && (
+                  <div style={{
+                    color: '#f66', fontSize: '13px', margin: '10px 0', padding: '10px 14px',
+                    background: 'rgba(255,50,50,0.08)', border: '1px solid rgba(255,80,80,0.25)',
+                    borderRadius: '8px', fontFamily: 'system-ui', lineHeight: 1.5,
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                  }}>
+                    <span style={{ flexShrink: 0 }}>⚠️</span>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>API 调用失败</div>
+                      <div style={{ fontSize: '12px', color: '#e88' }}>{error}</div>
+                      <div style={{ fontSize: '11px', color: '#a88', marginTop: 6 }}>
+                        💡 建议：① 切换到「🎬 Demo」模式查看演示 &nbsp; ② 检查 API Key 是否正确 &nbsp; ③ 切换其他模型试试
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* 预设典型问题 */}
                 <div style={{ marginTop: 14 }}>
@@ -776,20 +841,27 @@ export default function DeliberationUI() {
                 </div>
 
                 {/* Agent 对话 */}
-                {round.dialogues?.map((d, di) => (
-                  <div key={di} style={{
-                    marginBottom: 8, padding: '10px 12px',
-                    background: 'rgba(255,255,255,0.03)',
-                    borderRadius: '8px', borderLeft: '2px solid rgba(255,215,0,0.2)',
-                  }}>
-                    <div style={{ color: '#FFD700', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 4 }}>
-                      {d.agentName || d.agentId}
+                {round.dialogues?.map((d, di) => {
+                  const key = `${ri}-${d.agentId}`;
+                  const typed = typedTexts[key];
+                  const isTyping = typed !== undefined && typed !== d.text;
+                  return (
+                    <div key={di} style={{
+                      marginBottom: 8, padding: '10px 12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '8px', borderLeft: '2px solid rgba(255,215,0,0.2)',
+                    }}>
+                      <div style={{ color: '#FFD700', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 4 }}>
+                        {d.agentName || d.agentId}
+                        {isTyping && <span style={{ color: '#FFD700', fontSize: '10px', marginLeft: 6, opacity: 0.7 }}>▸ 输入中...</span>}
+                      </div>
+                      <div style={{ color: '#ccc', fontSize: '13px', fontFamily: 'system-ui', lineHeight: 1.6 }}>
+                        {typed !== undefined ? typed : d.text}
+                        {isTyping && <span style={{ animation: 'blink 0.8s step-end infinite', color: '#FFD700', fontWeight: 300 }}>|</span>}
+                      </div>
                     </div>
-                    <div style={{ color: '#ccc', fontSize: '13px', fontFamily: 'system-ui', lineHeight: 1.6 }}>
-                      {d.text}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {round.status === 'pending' && (
                   <div style={{ color: '#556', fontSize: '12px', fontFamily: 'system-ui', fontStyle: 'italic' }}>
