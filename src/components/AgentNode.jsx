@@ -1,7 +1,8 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import useNebulaStore from '../store/useNebulaStore.js';
 
 /**
  * Canvas 绘制 128×128 星体径向渐变纹理
@@ -76,8 +77,12 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
   // 拖拽状态
   const draggingRef = useRef(false);
   const dragStartRef = useRef([0, 0]);
-  const { camera, raycaster } = useThree();
-  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  const { camera } = useThree();
+  const setDraggingNode = useNebulaStore((s) => s.setDraggingNode);
+  // 相机面向平面：拖拽时随节点位置重建，体感像 2D 平面拖拽
+  const dragPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const ndc = useMemo(() => new THREE.Vector2(), []);
 
   // 动画目标值
   const targetScale = useRef(1);
@@ -125,42 +130,69 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
     }
   });
 
-  // Pointer 事件处理
+  // ========== 拖拽交互（Obsidian 图谱式）==========
+  // pointerdown 在节点上触发 → 锁定相机 + pin 节点 + 注册全局监听
+  // pointermove 在 window 上 → 计算面向相机的平面投影，节点跟手
+  // pointerup 在 window 上 → 释放 pin + 解锁相机
+  // 临时向量（避免每帧 new）
+  const tmpHit = useRef(new THREE.Vector3());
+
   const handlePointerDown = (e) => {
     e.stopPropagation();
     dragStartRef.current = [e.clientX, e.clientY];
-    if (forceGraph) forceGraph.startDrag(agent.id);
     draggingRef.current = false;
-  };
 
-  const handlePointerMove = (e) => {
-    if (!forceGraph || !forceGraph.isDragging()) return;
-    // 拖拽到 Y=0 平面
-    const ndc = new THREE.Vector2(
-      (e.clientX / window.innerWidth) * 2 - 1,
-      -(e.clientY / window.innerHeight) * 2 + 1
-    );
-    raycaster.setFromCamera(ndc, camera);
-    const target = new THREE.Vector3();
-    raycaster.ray.intersectPlane(plane, target);
-    if (target) {
-      forceGraph.moveDrag(agent.id, target);
-    }
-    // 判断是否移动超过阈值
-    const dx = e.clientX - dragStartRef.current[0];
-    const dy = e.clientY - dragStartRef.current[1];
-    if (Math.sqrt(dx * dx + dy * dy) > 3) {
-      draggingRef.current = true;
+    if (forceGraph) {
+      forceGraph.startDrag(agent.id);
+      // 以节点当前位置 + 相机朝向建立拖拽平面
+      const [px, py, pz] = getPhysPos(agent.id);
+      const nodePos = new THREE.Vector3(px, py, pz);
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir).normalize();
+      // 法线朝向相机（与 camDir 反向），平面经过节点
+      dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), nodePos);
+      // 同步 store → CameraController 禁用 OrbitControls
+      setDraggingNode(agent.id);
     }
   };
 
-  const handlePointerUp = (e) => {
-    e.stopPropagation();
-    if (forceGraph) forceGraph.endDrag();
-    if (!draggingRef.current) {
-      onSelect?.(agent.id);
-    }
-  };
+  // 全局 move/up：用 useEffect 注册到 window，确保指针移出节点后仍能继续
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!forceGraph || !forceGraph.isDragging()) return;
+      // 判断是否真的开始拖拽（位移超过阈值）
+      const dx = e.clientX - dragStartRef.current[0];
+      const dy = e.clientY - dragStartRef.current[1];
+      if (Math.hypot(dx, dy) > 3) draggingRef.current = true;
+
+      // NDC → 射线 → 投影到面向相机的拖拽平面
+      ndc.set(
+        (e.clientX / window.innerWidth) * 2 - 1,
+        -(e.clientY / window.innerHeight) * 2 + 1
+      );
+      raycaster.setFromCamera(ndc, camera);
+      if (raycaster.ray.intersectPlane(dragPlane, tmpHit.current)) {
+        forceGraph.moveDrag(agent.id, tmpHit.current);
+      }
+    };
+
+    const onUp = () => {
+      if (!forceGraph || !forceGraph.isDragging()) return;
+      forceGraph.endDrag();
+      setDraggingNode(null);
+      // 未发生位移 → 视为点击（选中 agent）
+      if (!draggingRef.current) {
+        onSelect?.(agent.id);
+      }
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [agent.id, camera, dragPlane, forceGraph, ndc, raycaster, onSelect, setDraggingNode]);
 
   // 选中 > hover > 默认 三级效果
   if (isSelected) {
@@ -240,11 +272,9 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
         />
       </mesh>
 
-      {/* 隐形碰撞体 */}
+      {/* 隐形碰撞体 — 只处理 down/hover；move/up 由 window 全局监听接管 */}
       <mesh
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
         onPointerEnter={() => {
           onHover?.(agent.id);
           document.body.style.cursor = 'pointer';
@@ -263,7 +293,7 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
         <Text fontSize={0.14} color="#e8f0ff" anchorX="center" anchorY="middle" outlineWidth={0.03} outlineColor="#000000">
           {agent.emoji} {agent.name}
         </Text>
-        <Text position={[0, -0.22, 0]} fontSize={0.08} color={agent.color} anchorX="center" anchorY="middle" outlineWidth={0.02} outlineColor="#000000">
+        <Text position={[0, -0.22, 0]} fontSize={0.105} color={agent.color} anchorX="center" anchorY="middle" outlineWidth={0.02} outlineColor="#000000">
           {agent.title}
         </Text>
       </Billboard>

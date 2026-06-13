@@ -23,8 +23,17 @@ export default function NebulaUI() {
   const [obsidianStatus, setObsidianStatus] = useState('');
   const [showDistrictPanel, setShowDistrictPanel] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
+  const [debugPanelOpen, setDebugPanelOpen] = useState(false);
   const runDemo = useNebulaStore((s) => s.runDemo);
   const demoActive = useNebulaStore((s) => s.demoActive);
+  const demoSubtitle = useNebulaStore((s) => s.demoSubtitle);
+  const demoPhase = useNebulaStore((s) => s.demoPhase);
+  const narrationEnabled = useNebulaStore((s) => s.narrationEnabled);
+  const toggleNarration = useNebulaStore((s) => s.toggleNarration);
+  const demoShowPhone = useNebulaStore((s) => s.demoShowPhone);
+  const demoShowDeliberation = useNebulaStore((s) => s.demoShowDeliberation);
+  const takeScreenshot = useNebulaStore((s) => s.takeScreenshot);
+  const screenshotReady = useNebulaStore((s) => s.screenshotReady);
 
   // 搜索过滤
   useEffect(() => {
@@ -100,6 +109,24 @@ export default function NebulaUI() {
                 fontFamily: 'inherit', letterSpacing: '0.05em', transition: 'all 0.2s',
               }}>✨ 星河巡游</button>
             )}
+            <button onClick={takeScreenshot} style={{
+              padding: '7px 12px', borderRadius: 8,
+              background: screenshotReady ? 'rgba(100,255,180,0.15)' : 'rgba(80,80,90,0.12)',
+              border: '1px solid ' + (screenshotReady ? 'rgba(100,255,180,0.4)' : 'rgba(120,120,140,0.2)'),
+              backdropFilter: 'blur(8px)',
+              color: screenshotReady ? '#88ffbb' : 'rgba(150,150,160,0.6)',
+              fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              fontFamily: 'inherit', transition: 'all 0.2s',
+            }}>{screenshotReady ? '✅ 已保存' : '📸 截图'}</button>
+            <button onClick={toggleNarration} title={narrationEnabled ? '关闭语音旁白' : '开启语音旁白'} style={{
+              padding: '7px 12px', borderRadius: 8,
+              background: narrationEnabled ? 'rgba(100,180,255,0.12)' : 'rgba(80,80,90,0.15)',
+              border: '1px solid ' + (narrationEnabled ? 'rgba(100,180,255,0.35)' : 'rgba(120,120,130,0.25)'),
+              backdropFilter: 'blur(8px)',
+              color: narrationEnabled ? '#88c8ff' : 'rgba(150,150,160,0.6)',
+              fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              fontFamily: 'inherit', transition: 'all 0.2s',
+            }}>{narrationEnabled ? '🔊 旁白' : '🔇 旁白'}</button>
             <button onClick={() => { setShowDistrictPanel(!showDistrictPanel); if (showDistrictPanel) setSelectedDistrict(null); }} style={{
               padding: '7px 14px', borderRadius: 8,
               background: showDistrictPanel ? 'linear-gradient(135deg, rgba(136,153,204,0.35), rgba(136,153,204,0.2))' : 'linear-gradient(135deg, rgba(136,153,204,0.15), rgba(136,153,204,0.05))',
@@ -158,6 +185,89 @@ export default function NebulaUI() {
           <span>✦ 关注 {userFriends.length}</span>
           {totalMemories > 0 && <span>✦ 记忆 {totalMemories}</span>}
         </div>
+
+        {/* ========== 调试面板 ========== */}
+        {debugPanelOpen && !demoActive && (
+          <div style={{ marginTop: 10, background: 'rgba(10,8,20,0.92)', border: '1px solid rgba(255,100,100,0.3)', borderRadius: 12, backdropFilter: 'blur(16px)', padding: 16, maxWidth: 500 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#FF6B6B', marginBottom: 10 }}>🔧 调试工具</div>
+
+            {/* 批量取消关注 */}
+            <button
+              onClick={() => {
+                // 批量取消所有关注，并同步清理 localStorage
+                const allFriends = [...useNebulaStore.getState().friends];
+                allFriends.forEach(id => useNebulaStore.getState().removeFriend(id));
+                // 强制清空 friends
+                localStorage.setItem('foldneb_friends', '[]');
+                // 手动清理 memories 中的"关注"关系
+                const mems = useNebulaStore.getState().memories;
+                const cleaned = {};
+                let changed = false;
+                for (const [pk, m] of Object.entries(mems)) {
+                  if (m.from === 'user' || m.to === 'user') {
+                    const remaining = m.relations.filter(r => r.label !== '关注');
+                    if (remaining.length === 0) {
+                      changed = true;
+                      continue; // 跳过，即删除
+                    }
+                    if (remaining.length !== m.relations.length) {
+                      changed = true;
+                      cleaned[pk] = { ...m, relations: remaining, interactionCount: remaining.length };
+                    } else {
+                      cleaned[pk] = m;
+                    }
+                  } else {
+                    cleaned[pk] = m;
+                  }
+                }
+                if (changed) {
+                  localStorage.setItem('foldneb_memories', JSON.stringify(cleaned));
+                }
+                // 刷新页面使 Zustand 重新加载清理后的数据
+                window.location.reload();
+              }}
+              style={{
+                padding: '10px 20px', borderRadius: 8,
+                background: 'linear-gradient(135deg, rgba(255,80,80,0.3), rgba(255,80,80,0.1))',
+                border: '1px solid rgba(255,80,80,0.5)',
+                color: '#FF6B6B', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit', letterSpacing: '0.05em', transition: 'all 0.2s',
+                width: '100%', marginBottom: 12,
+              }}
+            >🗑️ 强制清空所有关注 & 清理金色连线残留</button>
+
+            {/* 当前状态 */}
+            <div style={{ fontSize: 11, color: '#8899bb', marginBottom: 12 }}>
+              <p style={{ margin: '4px 0' }}>📊 friends 数组: <strong style={{ color: '#FFD700' }}>{useNebulaStore.getState().friends.join(', ') || '(空)'}</strong></p>
+              <p style={{ margin: '4px 0' }}>📊 memories 条目: <strong style={{ color: '#FFD700' }}>{totalMemories} 条</strong></p>
+              <p style={{ margin: '4px 0' }}>
+                📊 含"关注"的 memories:
+                <strong style={{ color: '#FF6B6B' }}>
+                  {Object.values(useNebulaStore.getState().memories)
+                    .filter(m => m.relations?.some(r => r.label === '关注')).length} 条
+                </strong>
+              </p>
+            </div>
+
+            {/* 重新关注 */}
+            <div style={{ fontSize: 12, color: '#8899bb', marginBottom: 6 }}>🔄 重新关注（测试）：</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {tier1Agents.slice(0, 8).map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => addFriend(a.id)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 6,
+                    background: 'rgba(136,153,204,0.12)',
+                    border: '1px solid rgba(136,153,204,0.25)',
+                    color: '#c0d8ff', fontSize: 11, cursor: 'pointer',
+                    fontFamily: 'inherit', transition: 'all 0.2s',
+                  }}
+                >{a.emoji} {a.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========== Agent 详情面板 ========== */}
@@ -238,6 +348,39 @@ export default function NebulaUI() {
             <div style={{ fontSize: 10, color: '#FFD700', textAlign: 'center', marginBottom: 6 }}>{obsidianStatus}</div>
           )}
 
+          {/* 知识库预览卡片 */}
+          <div style={{ 
+            marginBottom: 8, padding: '10px 12px',
+            background: 'rgba(99,85,188,0.06)', borderRadius: 10,
+            border: '1px solid rgba(99,85,188,0.12)',
+          }}>
+            <div style={{ fontSize: 10, color: '#8866CC', marginBottom: 6, letterSpacing: '0.05em' }}>
+              📂 Obsidian 知识库预览
+            </div>
+            <div style={{ fontSize: 10, color: '#7788aa', lineHeight: 1.6 }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+                <span style={{ color: '#6688aa', minWidth: 50 }}>路径</span>
+                <span style={{ color: '#aabbcc' }}>
+                  AI一人公司/11-黑客松大赛/折叠星云agent数据库/{agent.tier === 2 ? '2_精英星团' : '1_智慧星河'}/{districts.find(d => d.id === agent.district)?.name || agent.district}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+                <span style={{ color: '#6688aa', minWidth: 50 }}>档案</span>
+                <span style={{ color: '#aabbcc' }}>{agent.name}.md</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ color: '#6688aa', minWidth: 50 }}>类型</span>
+                <span style={{ 
+                  padding: '1px 6px', borderRadius: 4, fontSize: 9,
+                  background: agent.tier === 2 ? 'rgba(136,153,204,0.15)' : 'rgba(255,215,0,0.1)',
+                  color: agent.tier === 2 ? '#8899cc' : '#FFD700',
+                }}>
+                  {agent.tier === 2 ? '精英星团' : '智慧星河'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* 关注/取消关注 */}
           <div style={{ marginBottom: 8 }}>
             {userFriends.includes(selectedAgent) ? (
@@ -271,6 +414,140 @@ export default function NebulaUI() {
           )}
         </div>
       )}
+
+      {/* ========== Demo 旁白字幕 + 进度条 ========== */}
+      {demoActive && (
+        <>
+          {/* 底部旁白字幕 */}
+          {demoSubtitle && (
+            <div style={{
+              position: 'absolute', bottom: 60, left: '50%', transform: 'translateX(-50%)',
+              maxWidth: 720, textAlign: 'center', pointerEvents: 'none',
+              padding: '12px 32px',
+              background: 'rgba(5,5,20,0.6)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: 12,
+              borderTop: '1px solid rgba(255,215,0,0.15)',
+              animation: 'fadeInUp 0.6s ease-out',
+            }}>
+              <div style={{
+                fontSize: 16, lineHeight: 1.8, color: '#e8f0ff',
+                textShadow: '0 0 20px rgba(100,150,255,0.3), 0 2px 4px rgba(0,0,0,0.8)',
+                letterSpacing: '0.04em',
+              }}>
+                {demoSubtitle}
+              </div>
+            </div>
+          )}
+
+          {/* 顶部进度指示器 */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+            background: 'rgba(255,215,0,0.1)',
+          }}>
+            <div style={{
+              height: '100%',
+              background: 'linear-gradient(90deg, #FFD700, #FFAA44, #FFD700)',
+              boxShadow: '0 0 8px rgba(255,215,0,0.6)',
+              animation: 'demoProgress 45s linear forwards',
+            }} />
+          </div>
+
+          {/* Phase 5: Logo 收尾大字幕 */}
+          {demoPhase === 5 && (
+            <div style={{
+              position: 'absolute', top: '38%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              textAlign: 'center', pointerEvents: 'none',
+              animation: 'logoFadeIn 2s ease-out forwards',
+            }}>
+              <div style={{
+                fontSize: 42, fontWeight: 800, color: '#FFD700',
+                letterSpacing: '0.15em',
+                textShadow: '0 0 40px rgba(255,215,0,0.5), 0 0 80px rgba(255,215,0,0.2), 0 4px 12px rgba(0,0,0,0.8)',
+              }}>
+                FoldNeb 折叠星云
+              </div>
+              <div style={{
+                fontSize: 14, color: 'rgba(200,210,230,0.7)',
+                letterSpacing: '0.3em', marginTop: 12,
+                textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+              }}>
+                为思考者建造会生长的思想星河
+              </div>
+            </div>
+          )}
+
+          {/* Demo 朋友圈闪现提示 */}
+          {demoShowPhone && (
+            <div style={{
+              position: 'absolute', top: '20%', right: '15%',
+              pointerEvents: 'none',
+              animation: 'phoneFlash 1.8s ease-in-out forwards',
+            }}>
+              <div style={{
+                textAlign: 'center',
+                padding: '20px 30px',
+                background: 'rgba(5,5,20,0.85)',
+                backdropFilter: 'blur(16px)',
+                borderRadius: 16,
+                border: '2px solid rgba(255,215,0,0.3)',
+                boxShadow: '0 0 40px rgba(255,215,0,0.15)',
+              }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>📱</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#FFD700', letterSpacing: '0.05em' }}>
+                  思想者朋友圈
+                </div>
+                <div style={{ fontSize: 11, color: '#8899bb', marginTop: 4 }}>
+                  点赞 · 评论 · 自动回复
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Demo 决策推演闪现提示 */}
+          {demoShowDeliberation && (
+            <div style={{
+              position: 'absolute', top: '20%', left: '15%',
+              pointerEvents: 'none',
+              animation: 'phoneFlash 1.8s ease-in-out forwards',
+            }}>
+              <div style={{
+                textAlign: 'center',
+                padding: '20px 30px',
+                background: 'rgba(5,5,20,0.85)',
+                backdropFilter: 'blur(16px)',
+                borderRadius: 16,
+                border: '2px solid rgba(100,180,255,0.3)',
+                boxShadow: '0 0 40px rgba(100,180,255,0.15)',
+              }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>🧠</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#88bbff', letterSpacing: '0.05em' }}>
+                  多Agent决策推演
+                </div>
+                <div style={{ fontSize: 11, color: '#8899bb', marginTop: 4 }}>
+                  智囊团 · 多轮辩论 · 结构化报告
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {/* 右下角调试按钮 */}
+      <button
+        onClick={() => setDebugPanelOpen(!debugPanelOpen)}
+        title="调试工具"
+        style={{
+          position: 'fixed', bottom: 8, right: 130, zIndex: 30,
+          pointerEvents: 'auto',
+          background: 'rgba(136,153,204,0.12)',
+          border: '1px solid rgba(136,153,204,0.25)',
+          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
+          color: '#c0d8ff', fontSize: '13px', fontFamily: 'system-ui',
+          fontWeight: 600, letterSpacing: '0.5px',
+          boxShadow: '0 0 20px rgba(136,153,204,0.08)',
+        }}
+      >🔧 调试</button>
     </div>
   );
 }

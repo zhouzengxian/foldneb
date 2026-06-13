@@ -13,7 +13,7 @@ export const MODEL_PROVIDERS = [
   },
   {
     id: 'zhipu', name: '智谱 Coding Plan', icon: '🌀', color: '#4A6CF7',
-    url: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
+    url: 'https://open.bigmodel.cn/api/coding/paas/v4',
     models: ['glm-5.1', 'glm-4.7', 'glm-4.6', 'glm-4.6v'],
     apiKey: '',
     hint: 'Coding Plan 专属 · open.bigmodel.cn · glm-5.1',

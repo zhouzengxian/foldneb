@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useState, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { AGENTS, getAgent } from '../data/gameData.js';
+import { agents as AGENTS, getAgentById } from '../data/gameData.js';
 import useNebulaStore from '../store/useNebulaStore.js';
 import { processDialogue } from '../utils/memoryCrystal.js';
 import gsap from 'gsap';
@@ -210,11 +210,20 @@ function ButterflyTrail({ active }) {
 // ============================================
 export default function DemoEffects() {
   const demoHighlight = useNebulaStore((s) => s.demoHighlight);
-  const agent = demoHighlight ? getAgent(demoHighlight) : null;
+  const demoPhase = useNebulaStore((s) => s.demoPhase);
+  const agent = demoHighlight ? getAgentById(demoHighlight) : null;
   const butterflyActive = demoHighlight !== null;
+
+  // Phase 1: 混沌初开 — 2000粒子向宇宙中心(0,0,0)聚合
+  const showCenterAggregation = demoPhase === 1;
 
   return (
     <group>
+      {/* Phase 1: 中心聚合 — 宇宙诞生 */}
+      {showCenterAggregation && (
+        <AggregationParticles targetPos={[0, 0, 0]} active={true} />
+      )}
+      {/* Phase 3+: 向具体 Agent 聚合 + 脉冲 */}
       {demoHighlight && agent && (
         <>
           <PulseSphere position={agent.position} />

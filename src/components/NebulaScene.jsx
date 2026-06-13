@@ -8,6 +8,10 @@ import gsap from 'gsap';
 import { agents, tier1Agents, districts, connections, getAgentById } from '../data/gameData.js';
 // Store
 import useNebulaStore from '../store/useNebulaStore.js';
+// Utils
+import { processDialogue } from '../utils/memoryCrystal.js';
+// Audio
+import { playConvergeWhoosh, playDing, playWhoosh, startAmbient, stopAmbient, initAudio } from '../utils/audio.js';
 // Hooks
 import { useForceGraph } from '../hooks/useForceGraph.js';
 // Space Elements
@@ -19,6 +23,7 @@ import HeroSatellites from './HeroSatellites.jsx';
 import GrowingLines from './GrowingLines.jsx';
 import SparkleField from './SparkleField.jsx';
 import DistrictGround from './DistrictGround.jsx';
+import DemoEffects from './DemoController.jsx';
 
 // ============ 用户分身节点 — 发光球形星体 ============
 function UserNode({ getPhysPos }) {
@@ -303,6 +308,7 @@ function CameraController({ getPos }) {
   const autoRotate = useNebulaStore((s) => s.autoRotate);
   const cameraTarget = useNebulaStore((s) => s.cameraTarget);
   const focusAgentId = useNebulaStore((s) => s.focusAgentId);
+  const draggingNode = useNebulaStore((s) => s.draggingNode);
   const prevFocusRef = useRef(null);
 
   // focusAgentId 变化时，gsap 推近镜头
@@ -330,7 +336,9 @@ function CameraController({ getPos }) {
 
   useFrame(() => {
     if (controlsRef.current) {
-      controlsRef.current.autoRotate = autoRotate;
+      // 拖拽 agent 时禁用相机控制（Obsidian 图谱式交互）
+      controlsRef.current.enabled = !draggingNode;
+      controlsRef.current.autoRotate = autoRotate && !draggingNode;
 
       if (focusAgentId && getPos) {
         const [tx, ty, tz] = getPos(focusAgentId);
@@ -399,52 +407,167 @@ function NebulaContent() {
 
   const runDemo = useCallback(() => {
     if (demoActive) return;
-    useNebulaStore.getState().setDemoActive(true);
+    const S = useNebulaStore.getState();
+    S.setDemoActive(true);
+    S.setDemoPhase(0);
+    S.hideDialogueBubble();
 
-    const demoAgents = tier1Agents.slice(0, 6);
     const cam = cameraRef.current;
     if (!originCamRef.current) {
       originCamRef.current = {
-        x: cam.position.x,
-        y: cam.position.y,
-        z: cam.position.z,
+        x: cam.position.x, y: cam.position.y, z: cam.position.z,
       };
     }
 
+    // Demo 巡游目标 Agent
+    const jensen = tier1Agents.find(a => a.id === 'jensen_huang') || tier1Agents[0];
+    const wangym = tier1Agents.find(a => a.id === 'wangyangming') || tier1Agents[60];
+
+    // ===== 语音旁白（浏览器内置 TTS）=====
+    const speakNarration = (text) => {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel(); // 停止上一段
+      if (!S.narrationEnabled || !text) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN';
+      u.rate = 0.95;
+      u.pitch = 1.0;
+      // 尝试选中文语音
+      const voices = window.speechSynthesis.getVoices();
+      const zhVoice = voices.find(v => v.lang === 'zh-CN' || v.lang === 'zh_CN');
+      if (zhVoice) u.voice = zhVoice;
+      window.speechSynthesis.speak(u);
+    };
+
     const tl = gsap.timeline({
       onComplete: () => {
-        useNebulaStore.getState().setDemoActive(false);
-        useNebulaStore.getState().setDemoHighlight(null);
+        window.speechSynthesis?.cancel();
+        stopAmbient();
+        S.setDemoActive(false);
+        S.setDemoHighlight(null);
+        S.setDemoSubtitle('');
+        S.setDemoPhase(0);
+        S.setDemoShowPhone(false);
+        S.setDemoShowDeliberation(false);
+        S.clearFocus();
       },
     });
 
-    demoAgents.forEach((agent, idx) => {
-      const [px, py, pz] = agent.position;
-      tl.to(cam.position, {
-        x: px + 2,
-        y: py + 2,
-        z: pz + 4,
-        duration: 1.5,
-        ease: 'power2.inOut',
-        onStart: () => {
-          useNebulaStore.getState().setDemoHighlight(agent.id);
-          focusAgent(agent.id);
-          selectAgent(agent.id);
-        },
-      });
-      tl.to({}, { duration: 1.2 });
-    });
-
-    tl.to(cam.position, {
-      x: originCamRef.current.x,
-      y: originCamRef.current.y,
-      z: originCamRef.current.z,
-      duration: 2,
-      ease: 'power3.inOut',
+    // ===== Phase 1: 混沌初开 (0-7s) — 粒子聚合 + 环境音 =====
+    tl.to(cam.position, { x: 0, y: 8, z: 15, duration: 3, ease: 'power2.inOut',
       onStart: () => {
-        useNebulaStore.getState().setDemoHighlight(null);
+        S.setDemoPhase(1);
+        S.setDemoHighlight(null);
+        S.setDemoSubtitle('如果改变世界的 125 个大脑，都在同一片天空……');
+        speakNarration('如果改变世界的 125 个大脑，都在同一片天空……');
+        // 粒子聚合音效 + 环境音启动
+        playConvergeWhoosh();
+        initAudio();
+        setTimeout(() => startAmbient(), 500);
       },
     });
+    tl.to({}, { duration: 4 }); // 让粒子聚合效果播放充分
+
+    // ===== Phase 2: 星系展开 (7-17s) =====
+    tl.to(cam.position, { x: 0, y: 35, z: 50, duration: 3, ease: 'power2.inOut',
+      onStart: () => {
+        S.setDemoPhase(2);
+        S.setDemoSubtitle('AI前沿、认知决策、思想源流——黄仁勋、马斯克、王阳明、老子——跨越千年的思想者，化为发光星体');
+        speakNarration('AI前沿、认知决策、思想源流。黄仁勋、马斯克、王阳明、老子，跨越千年的思想者，化为发光星体');
+        playWhoosh();
+      },
+    });
+    // 环绕半圈
+    tl.to(cam.position, { x: -35, y: 35, z: 35, duration: 3.5, ease: 'sine.inOut',
+      onUpdate: () => {
+        if (cam.lookAt) cam.lookAt(0, 0, 0);
+      },
+    });
+    tl.to(cam.position, { x: 0, y: 30, z: 45, duration: 3.5, ease: 'sine.inOut' });
+
+    // ===== Phase 3: 触碰星体 (17-27s) =====
+    // 飞向黄仁勋
+    tl.to(cam.position, {
+      x: jensen.position[0] + 2.5, y: jensen.position[1] + 2, z: jensen.position[2] + 4,
+      duration: 2.5, ease: 'power3.inOut',
+      onStart: () => {
+        S.setDemoPhase(3);
+        S.setDemoHighlight(jensen.id);
+        focusAgent(jensen.id);
+        S.setDemoSubtitle('轻触任何一颗星，就能听到他们的思想。搜索、定位、对话——知识活了');
+        speakNarration('轻触任何一颗星，就能听到他们的思想。搜索、定位、对话，知识活了');
+        playDing();
+        setTimeout(() => S.showDialogueBubble(jensen.id), 2200);
+      },
+    });
+    tl.to({}, { duration: 1.5 }); // 停留看语录
+
+    // 飞向王阳明
+    tl.to(cam.position, {
+      x: wangym.position[0] + 2.5, y: wangym.position[1] + 2, z: wangym.position[2] + 4,
+      duration: 2.5, ease: 'power3.inOut',
+      onStart: () => {
+        S.setDemoHighlight(wangym.id);
+        focusAgent(wangym.id);
+        S.hideDialogueBubble();
+        playDing();
+        setTimeout(() => S.showDialogueBubble(wangym.id), 2200);
+      },
+    });
+    tl.to({}, { duration: 1.5 }); // 停留看语录
+
+    // ===== Phase 3.5: 朋友圈闪现 (27-29s) =====
+    tl.to({}, {
+      duration: 2,
+      onStart: () => {
+        S.setDemoSubtitle('思想者还有朋友圈——点赞、评论、自动回复，社交化Agent互动');
+        speakNarration('思想者还有朋友圈。点赞、评论、自动回复，社交化Agent互动');
+        S.setDemoShowPhone(true);
+        playWhoosh();
+        setTimeout(() => S.setDemoShowPhone(false), 1800);
+      },
+    });
+
+    // ===== Phase 4: 折叠记忆 (29-37s) =====
+    tl.to(cam.position, { x: 2, y: 12, z: 8, duration: 2.5, ease: 'power2.inOut',
+      onStart: () => {
+        S.setDemoPhase(4);
+        S.hideDialogueBubble();
+        S.setDemoSubtitle('每一次思考，都凝固成金色连线——记忆永不重置，星河持续生长');
+        speakNarration('每一次思考，都凝固成金色连线。记忆永不重置，星河持续生长');
+        // 提取记忆晶体 → 生成金色连线
+        if (typeof processDialogue === 'function') {
+          processDialogue(jensen.id, wangym.id);
+        } else {
+          S.addMemory(jensen.id, wangym.id, '跨界共鸣', Date.now(), 'demo');
+        }
+      },
+    });
+    tl.to({}, { duration: 5.5 });
+
+    // ===== Phase 4.5: 决策推演闪现 (37-39s) =====
+    tl.to({}, {
+      duration: 2,
+      onStart: () => {
+        S.setDemoSubtitle('支持多Agent决策推演——思想者为你出谋划策，生成结构化报告');
+        speakNarration('支持多Agent决策推演。思想者为你出谋划策，生成结构化报告');
+        S.setDemoShowDeliberation(true);
+        playWhoosh();
+        setTimeout(() => S.setDemoShowDeliberation(false), 1800);
+      },
+    });
+
+    // ===== Phase 5: 星河无限 — 数据统计收尾 (39-50s) =====
+    tl.to(cam.position, { x: 0, y: 40, z: 55, duration: 4, ease: 'power2.inOut',
+      onStart: () => {
+        S.setDemoPhase(5);
+        S.setDemoHighlight(null);
+        const memCount = Object.keys(S.memories).length;
+        S.setDemoSubtitle(`FoldNeb 折叠星云——125位思想者 · 13个星系 · ${memCount}条记忆——为思考者建造会生长的思想星河`);
+        speakNarration(`FoldNeb 折叠星云。125位思想者，13个星系，${memCount}条记忆。为思考者建造会生长的思想星河`);
+      },
+    });
+    tl.to({}, { duration: 7 }); // 收尾全景 + Logo + 数据展示
   }, [demoActive]);
 
   // 注册 runDemo 到 store，供 NebulaUI 调用
@@ -554,12 +677,17 @@ function NebulaContent() {
 
       {/* ==== 相机 ==== */}
       <CameraController getPos={getPos} />
+
+      {/* ==== Demo 特效层（脉冲球体 + 聚合粒子 + 蝴蝶尾迹） ==== */}
+      <DemoEffects />
     </>
   );
 }
 
 // ============ 主场景 ============
 export default function NebulaScene() {
+  const hideDialogueBubble = useNebulaStore((s) => s.hideDialogueBubble);
+
   return (
     <Canvas
       camera={{ position: [0, 18, 30], fov: 50, near: 0.1, far: 300 }}
@@ -574,6 +702,9 @@ export default function NebulaScene() {
       onCreated={({ scene }) => {
         scene.fog = new THREE.Fog('#000010', 60, 200);
         scene.background = new THREE.Color('#050520');
+      }}
+      onPointerMissed={() => {
+        hideDialogueBubble();
       }}
     >
       <NebulaContent />

@@ -20,6 +20,63 @@ function saveToStorage(key, data) {
   } catch {}
 }
 
+/**
+ * 自愈清理：移除 memories 中的"孤儿关注"关系
+ * 即 user↔agent 间的 label==='关注' 记录，但该 agent 已不在 friends 列表中。
+ * 防止历史残留（旧版本 removeFriend 未清理 memories）导致金色连线不消失。
+ */
+function sanitizeMemories(memories, friends) {
+  const cleaned = {};
+  let changed = false;
+  for (const [pairKey, mem] of Object.entries(memories)) {
+    const isUserPair = mem.from === 'user' || mem.to === 'user';
+    if (!isUserPair) {
+      cleaned[pairKey] = mem;
+      continue;
+    }
+    const otherId = mem.from === 'user' ? mem.to : mem.from;
+    const remaining = mem.relations.filter((r) => {
+      if (r.label !== '关注') return true;
+      return friends.includes(otherId);
+    });
+    if (remaining.length === mem.relations.length) {
+      cleaned[pairKey] = mem;
+    } else {
+      changed = true;
+      if (remaining.length > 0) {
+        cleaned[pairKey] = {
+          ...mem,
+          relations: remaining,
+          interactionCount: remaining.length,
+        };
+      }
+      // remaining 为 0 → 整条删除（不放入 cleaned）
+    }
+  }
+  return { cleaned, changed };
+}
+
+// 初始加载：先读 friends，再用它清洗 memories，保证启动时数据自洽
+const _initialFriends = loadFromStorage('friends', []);
+const _rawMemories = loadFromStorage('memories', {});
+let _initialMemories;
+
+// 核弹清理：如果没有任何关注好友，清空所有 memories（包括 demo/推演残留）
+if (_initialFriends.length === 0 && Object.keys(_rawMemories).length > 0) {
+  _initialMemories = {};
+  // 同步清空 localStorage
+  try { localStorage.removeItem('foldneb_memories'); } catch {}
+  // 也顺手清理其他历史数据
+  try { localStorage.removeItem('foldneb_likes'); } catch {}
+  try { localStorage.removeItem('foldneb_replies'); } catch {}
+} else {
+  const sanitized = sanitizeMemories(_rawMemories, _initialFriends);
+  if (sanitized.changed) {
+    saveToStorage('memories', sanitized.cleaned);
+  }
+  _initialMemories = sanitized.cleaned;
+}
+
 const useNebulaStore = create((set, get) => ({
   // ========================================
   // 3D 交互
@@ -38,7 +95,7 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   // 记忆系统
   // ========================================
-  memories: loadFromStorage('memories', {}),
+  memories: _initialMemories,
 
   // ========================================
   // 朋友圈系统
@@ -46,7 +103,7 @@ const useNebulaStore = create((set, get) => ({
   phoneOpen: false,
   phoneScreen: 'moments',
   userProfile: loadFromStorage('profile', { name: '探索者', avatar: '🌟' }),
-  friends: loadFromStorage('friends', []),
+  friends: _initialFriends,
   likes: loadFromStorage('likes', {}),
   replies: loadFromStorage('replies', {}),
 
@@ -64,12 +121,18 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   demoActive: false,
   demoHighlight: null,
+  demoSubtitle: '',
+  demoPhase: 0,
+  narrationEnabled: true,
   runDemo: null,
+  demoShowPhone: false,
+  demoShowDeliberation: false,
 
   // ========================================
   // 新手引导
   // ========================================
   onboardingDone: loadFromStorage('onboardingDone', false),
+  onboardingStep: 0,
 
   // ========================================
   // UI 状态
@@ -79,12 +142,15 @@ const useNebulaStore = create((set, get) => ({
   searchQuery: '',
   dialogueBubble: null,
   memoryGraphOpen: false,
+  screenshotReady: false,
+  draggingNode: null, // 当前拖拽中的 agentId，用于禁用 OrbitControls
 
   // ========================================
   // Actions: 3D 交互
   // ========================================
+  setDraggingNode: (id) => set({ draggingNode: id }),
   selectAgent: (id) => set({ selectedAgent: id, panelOpen: true }),
-  deselectAgent: () => set({ selectedAgent: null, panelOpen: false }),
+  deselectAgent: () => set({ selectedAgent: null, panelOpen: false, dialogueBubble: null }),
   focusAgent: (id) => {
     const agent = getAgentById(id);
     if (agent) {
@@ -166,6 +232,29 @@ const useNebulaStore = create((set, get) => ({
     const newFriends = get().friends.filter(f => f !== id);
     set({ friends: newFriends });
     saveToStorage('friends', newFriends);
+
+    // 同步清理 memories 中的"关注"关系，避免金色连线残留
+    // 若反复关注/取关过，relations 里可能含多条"关注"，需全部移除
+    const pairKey = makePairKey('user', id);
+    const { memories } = get();
+    const mem = memories[pairKey];
+    if (mem) {
+      const remaining = mem.relations.filter(r => r.label !== '关注');
+      const newMemories = { ...memories };
+      if (remaining.length === 0) {
+        // 该 agent 与 user 之间只剩"关注"关系 → 整条 memory 删除，连线消失
+        delete newMemories[pairKey];
+      } else {
+        // 还有其他关系（如"认同"/"思想共鸣"）→ 保留，但修正 interactionCount
+        newMemories[pairKey] = {
+          ...mem,
+          relations: remaining,
+          interactionCount: remaining.length,
+        };
+      }
+      set({ memories: newMemories });
+      saveToStorage('memories', newMemories);
+    }
   },
   isFriend: (id) => get().friends.includes(id),
 
@@ -346,6 +435,49 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   setDemoActive: (v) => set({ demoActive: v }),
   setDemoHighlight: (id) => set({ demoHighlight: id }),
+  setDemoSubtitle: (text) => set({ demoSubtitle: text }),
+  setDemoPhase: (phase) => set({ demoPhase: phase }),
+  toggleNarration: () => set((s) => ({ narrationEnabled: !s.narrationEnabled })),
+  setDemoShowPhone: (v) => set({ demoShowPhone: v }),
+  setDemoShowDeliberation: (v) => set({ demoShowDeliberation: v }),
+
+  // ========================================
+  // Actions: 新手引导
+  // ========================================
+  nextOnboardingStep: () => set((s) => ({ onboardingStep: s.onboardingStep + 1 })),
+  prevOnboardingStep: () => set((s) => ({ onboardingStep: Math.max(0, s.onboardingStep - 1) })),
+  completeOnboarding: () => {
+    set({ onboardingDone: true, onboardingStep: 0 });
+    saveToStorage('onboardingDone', true);
+  },
+  skipOnboarding: () => {
+    set({ onboardingDone: true, onboardingStep: 0 });
+    saveToStorage('onboardingDone', true);
+  },
+  resetOnboarding: () => {
+    set({ onboardingDone: false, onboardingStep: 0 });
+    saveToStorage('onboardingDone', false);
+  },
+
+  // ========================================
+  // Actions: 截图
+  // ========================================
+  setScreenshotReady: (v) => set({ screenshotReady: v }),
+  takeScreenshot: () => {
+    try {
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return;
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `FoldNeb_折叠星云_${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = dataUrl;
+      link.click();
+      set({ screenshotReady: true });
+      setTimeout(() => set({ screenshotReady: false }), 2000);
+    } catch (e) {
+      console.warn('截图失败:', e);
+    }
+  },
 
   // ========================================
   // Actions: UI
