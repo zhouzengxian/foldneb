@@ -5,7 +5,7 @@ import {
   extractInsights, generateReport, getAgentInfo,
   setDeliberationProvider, getDeliberationProvider,
 } from '../utils/deliberationEngine';
-import { MODEL_PROVIDERS, hasValidKey, saveUserCreds, getUserCreds, getProviderModels } from '../utils/modelConfig';
+import { MODEL_PROVIDERS, hasValidKey, saveUserCreds, getUserCreds, getProviderModels, getLastApiError, getCorsProxyUrl, setCorsProxyUrl } from '../utils/modelConfig';
 import DeliberationGraph from './DeliberationGraph';
 import DeliberationHistory from './DeliberationHistory';
 import DEMOS from '../utils/deliberationDemos';
@@ -54,6 +54,8 @@ export default function DeliberationUI() {
   const [modelInput, setModelInput] = useState('');
   const [exporting, setExporting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCorsConfig, setShowCorsConfig] = useState(false);
+  const [corsProxyInput, setCorsProxyInput] = useState(() => getCorsProxyUrl());
   const abortRef = useRef(false);
   const demoRunningRef = useRef(false);
   const modeRef = useRef('api');
@@ -119,7 +121,10 @@ export default function DeliberationUI() {
     const analysis = await analyzeProblem(problem.trim());
     if (abortRef.current) return;
     if (!analysis || !analysis.agents || analysis.agents.length < 2) {
-      setError('问题分析失败，请尝试更具体地描述你的困境');
+      const apiErr = getLastApiError();
+      const msg = apiErr || '问题分析失败，请尝试更具体地描述你的困境';
+      setError(msg);
+      addLog(`❌ ${msg}`, 'error');
       setDeliberationPhase('idle');
       return;
     }
@@ -133,7 +138,10 @@ export default function DeliberationUI() {
     const rounds = await planRounds(problem.trim(), analysis.domain, analysis.agents.map(a => a.id));
     if (abortRef.current) return;
     if (!rounds || rounds.length === 0) {
-      setError('推演规划失败');
+      const apiErr = getLastApiError();
+      const msg = apiErr || '推演规划失败';
+      setError(msg);
+      addLog(`❌ ${msg}`, 'error');
       setDeliberationPhase('idle');
       return;
     }
@@ -168,16 +176,24 @@ export default function DeliberationUI() {
 
       // 存入 store
       const dialogues = [];
+      let failCount = 0;
       for (const resp of responses) {
         if (resp && resp.text) {
           dialogues.push(resp);
           addDeliberationDialogue(ri, resp);
           addLog(`  ${resp.agentName || resp.agentId}: ${resp.text.slice(0, 60)}…`);
-
-          // 记忆提取：每次Agent回应都生成一条记忆
+          // 记忆提取
           const relationLabel = round.theme.slice(0, 6);
           storeAddMemory('user', resp.agentId, `${relationLabel}推演`, Date.now(), 'deliberation');
+        } else {
+          failCount++;
+          const agentName = resp?.agentName || resp?.agentId || 'Unknown';
+          addLog(`  ⚠ ${agentName}: API 回应失败`, 'error');
         }
+      }
+      if (failCount > 0 && failCount === responses.length) {
+        const apiErr = getLastApiError();
+        addLog(`  ❌ 本轮全部 Agent 回应失败: ${apiErr || '网络请求异常，请检查网络或切换模型'}`, 'error');
       }
 
       // 提取洞察
@@ -572,6 +588,54 @@ export default function DeliberationUI() {
                         >💾 保存</button>
                       </div>
                     </div>
+                  </div>
+                )}
+                {/* CORS 代理配置 */}
+                {mode === 'api' && (
+                  <div style={{
+                    padding: '8px 10px', marginBottom: 14,
+                    background: 'rgba(100,150,255,0.04)',
+                    border: '1px solid rgba(100,150,255,0.12)',
+                    borderRadius: '8px', display: 'flex', alignItems: 'center', gap: 8,
+                    fontSize: '11px', fontFamily: 'system-ui',
+                  }}>
+                    <span style={{ color: '#889', flexShrink: 0, cursor: 'pointer' }}
+                      onClick={() => setShowCorsConfig(!showCorsConfig)}
+                    >🌐 代理 {showCorsConfig ? '▲' : '▼'}</span>
+                    {corsProxyInput ? (
+                      <span style={{
+                        color: '#4A8', fontWeight: 600, fontSize: '10px',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }} title={corsProxyInput}>
+                        ✓ 已启用 ({corsProxyInput.slice(0, 30)}...)
+                      </span>
+                    ) : (
+                      <span style={{ color: '#e66', fontSize: '10px' }}>⚠ 直连（可能被 CORS 拦截）</span>
+                    )}
+                    {showCorsConfig && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                        <input
+                          value={corsProxyInput}
+                          onChange={e => setCorsProxyInput(e.target.value)}
+                          placeholder="https://corsproxy.io/?"
+                          style={{
+                            flex: 1, background: 'rgba(0,0,0,0.4)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '4px', padding: '4px 6px',
+                            color: '#ddd', fontSize: '10px', fontFamily: 'monospace',
+                            outline: 'none',
+                          }}
+                        />
+                        <button
+                          onClick={() => { setCorsProxyUrl(corsProxyInput); setShowCorsConfig(false); }}
+                          style={{
+                            background: 'rgba(72,196,128,0.2)', border: '1px solid rgba(72,196,128,0.3)',
+                            borderRadius: '4px', padding: '4px 8px', color: '#8e8',
+                            fontSize: '10px', cursor: 'pointer', fontFamily: 'system-ui',
+                          }}
+                        >保存</button>
+                      </div>
+                    )}
                   </div>
                 )}
                 <p style={{ color: '#ccd', fontSize: '13px', fontFamily: 'system-ui', margin: '0 0 16px' }}>

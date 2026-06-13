@@ -38,6 +38,45 @@ export const MODEL_PROVIDERS = [
 
 export const DEFAULT_PROVIDER_ID = 'zhipu';
 
+// ===== CORS 代理配置 =====
+// 浏览器直接请求外部 API 会触发 CORS 拦截（尤其在 GitHub Pages 静态托管下）
+// 可选代理：
+//   'https://corsproxy.io/?'       — 免费，支持 POST + Header 转发
+//   'https://api.allorigins.win/raw?url=' — 备用（仅 GET）
+// 设为空字符串 '' 则直连（本地开发通常没问题）
+let _corsProxyUrl = '';
+
+/** 自动检测：非 localhost 环境下默认启用代理 */
+function detectShouldUseProxy() {
+  try {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.')) return false;
+    return true;
+  } catch { return false; }
+}
+
+export function getCorsProxyUrl() {
+  // 从 localStorage 读取用户设置，其次用默认值
+  try {
+    const saved = localStorage.getItem('foldneb_cors_proxy');
+    if (saved !== null) return saved; // 用户明确设置过
+  } catch {}
+  return detectShouldUseProxy() ? 'https://corsproxy.io/?' : '';
+}
+
+export function setCorsProxyUrl(url) {
+  try { localStorage.setItem('foldneb_cors_proxy', url || ''); } catch {}
+  _corsProxyUrl = url || '';
+}
+
+// 初始化
+_corsProxyUrl = getCorsProxyUrl();
+
+/** 获取最近的 API 错误信息 */
+let _lastApiError = null;
+export function getLastApiError() { return _lastApiError; }
+export function clearLastApiError() { _lastApiError = null; }
+
 // ===== localStorage 持久化 =====
 const STORAGE_KEY = 'foldneb_model_creds';
 
@@ -115,13 +154,18 @@ export function getProviderModels(providerId) {
 export async function callLLMWithProvider(providerId, systemPrompt, userPrompt, options = {}) {
   const cfg = getEffectiveConfig(providerId);
   if (!cfg.apiKey || cfg.apiKey.length < 10) {
-    console.error(`[${providerId}] 未设置 API Key`);
+    _lastApiError = `[${cfg.name}] 未设置 API Key，请在设置中配置`;
+    console.error(_lastApiError);
     return null;
   }
 
-  const { temperature = 0.7, maxTokens = 800, timeoutMs = 20000 } = options;
+  const { temperature = 0.7, maxTokens = 800, timeoutMs = 30000 } = options;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  // 决定实际请求 URL（是否走代理）
+  const proxy = _corsProxyUrl || getCorsProxyUrl();
+  const targetUrl = proxy ? proxy + encodeURIComponent(cfg.url) : cfg.url;
 
   try {
     const isOpenAIFormat = !cfg.url.includes('minimax.chat');
@@ -148,7 +192,7 @@ export async function callLLMWithProvider(providerId, systemPrompt, userPrompt, 
       });
     }
 
-    const r = await fetch(cfg.url, {
+    const r = await fetch(targetUrl, {
       method: 'POST', signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
@@ -161,11 +205,13 @@ export async function callLLMWithProvider(providerId, systemPrompt, userPrompt, 
 
     if (!r.ok) {
       const errText = await r.text().catch(() => '');
-      console.error(`[${cfg.name}] API ${r.status}:`, errText.slice(0, 200));
+      _lastApiError = `[${cfg.name}] HTTP ${r.status}: ${errText.slice(0, 150)}`;
+      console.error(_lastApiError);
       return null;
     }
 
     const d = await r.json();
+    _lastApiError = null;
     if (isOpenAIFormat) {
       return d.choices?.[0]?.message?.content || '';
     } else {
@@ -173,8 +219,14 @@ export async function callLLMWithProvider(providerId, systemPrompt, userPrompt, 
     }
   } catch (e) {
     clearTimeout(timeout);
-    if (e.name === 'AbortError') console.warn(`[${providerId}] LLM 超时`);
-    else console.error(`[${providerId}] LLM 错误:`, e.message);
+    if (e.name === 'AbortError') {
+      _lastApiError = `[${cfg.name}] 请求超时 (${timeoutMs/1000}s)，请检查网络或尝试切换模型`;
+    } else if (e.message === 'Failed to fetch') {
+      _lastApiError = `[${cfg.name}] 网络请求被浏览器拦截（CORS 跨域限制）。${proxy ? '代理已开启但仍失败，请尝试切换代理地址。' : '请开启 CORS 代理以绕过跨域限制。'}`;
+    } else {
+      _lastApiError = `[${cfg.name}] 网络错误: ${e.message}`;
+    }
+    console.error(_lastApiError);
     return null;
   }
 }
