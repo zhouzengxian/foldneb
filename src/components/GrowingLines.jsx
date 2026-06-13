@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import useCityStore from '../store/useCityStore';
+import useNebulaStore from '../store/useNebulaStore';
 import GrowingLine from './GrowingLine';
 
 /**
@@ -12,7 +12,7 @@ import GrowingLine from './GrowingLine';
  * - 只渲染 Tier-1 agent 之间的记忆（Tier-2/3 无视觉节点）
  */
 export default function GrowingLines({ getPos }) {
-  const memories = useCityStore((s) => s.memories);
+  const memories = useNebulaStore((s) => s.memories);
 
   // 转换为数组，去重确保每个 pairKey 只有一条线
   const memoryList = useMemo(() => {
