@@ -6,6 +6,67 @@
 
 ---
 
+## 系统架构
+
+```mermaid
+graph TB
+    subgraph ENTRY["▸ 入口"]
+        MAIN["main.jsx"] --> APP["App.jsx · 路由调度"]
+    end
+
+    subgraph UI["▸ 表现层"]
+        subgraph SCENE["🌌 3D 星河 · Three.js"]
+            NScene["NebulaScene 场景容器"]
+            ANode["AgentNode 思想星体"]
+            CNode["CustomCloneNode 用户分身 🪐"]
+            CLines["ConnectionLines 归属线"]
+            GLines["GrowingLines 生长藤蔓"]
+            Star["Starfield 星空背景"]
+        end
+        subgraph PANELS["🖥️ 2D 面板 · React"]
+            NUI["NebulaUI 主界面"]
+            Phone["PhoneApp 朋友圈"]
+            Delib["DeliberationUI 决策推演"]
+            Temp["TemporalDeliberation 时间折叠"]
+            Clone["CloneCreator 分身创建"]
+            Chat["CustomCloneChat 分身对话"]
+        end
+        subgraph VIZ["📊 可视化子图"]
+            DGraph["DeliberationGraph 推演力图"]
+            MGraph["MemoryGraph 记忆图谱"]
+            TGraph["TimelineGraph 时间线"]
+        end
+    end
+
+    subgraph STATE["▸ 状态层"]
+        Store["🐻 Zustand Store<br/>useNebulaStore<br/>全局状态 + localStorage 持久化"]
+        Hook["🪝 useForceGraph<br/>力导向布局"]
+    end
+
+    subgraph ENGINE["▸ 引擎层"]
+        DE["🧬 deliberationEngine<br/>多视角决策"]
+        TE["⏱️ temporalEngine<br/>时间折叠"]
+        FE["🔀 forkEngine<br/>分叉对比"]
+        CT["🔎 causalTrace<br/>因果回溯"]
+        ARE["🤖 agentReplyEngine<br/>统一回复 · 三级降级"]
+        IMA["📚 imaClient<br/>腾讯知识库"]
+        MC["🎛️ modelConfig<br/>多模型调度"]
+    end
+
+    subgraph DATA["▸ 数据层"]
+        USER["👤 用户数据<br/>friends / clone / 对话"]
+        STATIC["📦 静态预设<br/>125位思想者 + 朋友圈"]
+        EXT["☁️ 外部服务<br/>LLM APIs / ima / Obsidian"]
+    end
+
+    ENTRY --> UI
+    SCENE & PANELS --> STATE
+    STATE --> ENGINE
+    ENGINE --> DATA
+```
+
+---
+
 ## 在线体验
 
 - **GitHub Pages**: https://zhouzengxian.github.io/foldneb
