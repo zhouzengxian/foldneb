@@ -5,18 +5,18 @@
 
 export const MODEL_PROVIDERS = [
   {
+    id: 'zhipu', name: '智谱 Coding Plan', icon: '🌀', color: '#4A6CF7',
+    url: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
+    models: ['glm-4.7', 'glm-4.6', 'glm-4.6v'],
+    apiKey: '',
+    hint: 'Coding Plan 专属 · open.bigmodel.cn',
+  },
+  {
     id: 'deepseek', name: 'DeepSeek', icon: '🐋', color: '#4D6BFE',
     url: 'https://api.deepseek.com/v1/chat/completions',
     models: ['deepseek-chat', 'deepseek-reasoner'],
     apiKey: '',
     hint: '注册送500万tokens · platform.deepseek.com',
-  },
-  {
-    id: 'zhipu', name: '智谱 GLM', icon: '🌀', color: '#4A6CF7',
-    url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    models: ['glm-4-flash', 'glm-4-plus', 'glm-4-air'],
-    apiKey: '',
-    hint: '新用户送额度 · open.bigmodel.cn',
   },
   {
     id: 'kimi', name: 'Kimi', icon: '🌙', color: '#8B5CF6',
@@ -34,7 +34,7 @@ export const MODEL_PROVIDERS = [
   },
 ];
 
-export const DEFAULT_PROVIDER_ID = 'deepseek';
+export const DEFAULT_PROVIDER_ID = 'zhipu';
 
 // ===== CORS 代理配置 =====
 // 浏览器直接请求外部 API 会触发 CORS 拦截（尤其在 GitHub Pages 静态托管下）
