@@ -5,38 +5,36 @@
 
 export const MODEL_PROVIDERS = [
   {
-    id: 'zhipu', name: '智谱 Coding Plan', icon: '🌀', color: '#4A6CF7',
-    url: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
-    models: ['glm-4.7', 'glm-4.6v', 'glm-5.1'],
-    apiKey: '627824cea92f4732a22d97ed05e8d8dc.sjbv17PHukQQas4O',
-  },
-  {
     id: 'deepseek', name: 'DeepSeek', icon: '🐋', color: '#4D6BFE',
     url: 'https://api.deepseek.com/v1/chat/completions',
     models: ['deepseek-chat', 'deepseek-reasoner'],
     apiKey: '',
+    hint: '注册送500万tokens · platform.deepseek.com',
+  },
+  {
+    id: 'zhipu', name: '智谱 GLM', icon: '🌀', color: '#4A6CF7',
+    url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    models: ['glm-4-flash', 'glm-4-plus', 'glm-4-air'],
+    apiKey: '',
+    hint: '新用户送额度 · open.bigmodel.cn',
   },
   {
     id: 'kimi', name: 'Kimi', icon: '🌙', color: '#8B5CF6',
     url: 'https://api.moonshot.cn/v1/chat/completions',
     models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
     apiKey: '',
-  },
-  {
-    id: 'mimo', name: '小米 MiMo', icon: '⚡', color: '#FF8C42',
-    url: 'https://api.xiaomimomo.com/v1/chat/completions',
-    models: ['mimo-v2-flash'],
-    apiKey: 'sk-kzq0ujb0gyyfq6dch8oz9pknar3ep9qemfl6p9mxrh4wnhfy',
+    hint: '注册送15元 · platform.moonshot.cn',
   },
   {
     id: 'minimax', name: 'MiniMax', icon: '🌟', color: '#F59E0B',
     url: 'https://api.minimax.chat/v1/text/chatcompletion_v2',
     models: ['abab6.5s-chat', 'abab7-chat-preview'],
     apiKey: '',
+    hint: '注册送额度 · platform.minimax.io',
   },
 ];
 
-export const DEFAULT_PROVIDER_ID = 'zhipu';
+export const DEFAULT_PROVIDER_ID = 'deepseek';
 
 // ===== CORS 代理配置 =====
 // 浏览器直接请求外部 API 会触发 CORS 拦截（尤其在 GitHub Pages 静态托管下）
