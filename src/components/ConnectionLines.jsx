@@ -1,200 +1,156 @@
-import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
-import { AGENTS, getAgent } from '../data/gameData.js';
+import { getAgentById } from '../data/gameData.js';
 
 /**
- * 计算两点之间的曲线控制点（中点上拱，模拟弧形连线）
+ * 静态知识线 + 动态记忆金线
+ * 使用力导向实时位置
  */
-function getCurvePoints(fromPos, toPos, arcHeight = 0.3) {
-  const from = new THREE.Vector3(...fromPos);
-  const to = new THREE.Vector3(...toPos);
-  const mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+export default function ConnectionLines({ connections, getPos, memories = {} }) {
+  return (
+    <group>
+      {connections.map((conn, idx) => {
+        const fromAgent = getAgentById(conn.from);
+        const toAgent = getAgentById(conn.to);
+        if (!fromAgent || !toAgent) return null;
 
-  // 中点向上偏移
-  mid.y += arcHeight;
+        const hasMemory = conn.interactionCount && conn.interactionCount > 0;
 
-  const curve = new THREE.QuadraticBezierCurve3(from, mid, to);
-  return curve.getPoints(32);
+        return (
+          <React.Fragment key={`conn-${conn.from}-${conn.to}-${idx}`}>
+            {hasMemory ? (
+              <MemoryLine conn={conn} fromAgent={fromAgent} getPos={getPos} />
+            ) : (
+              <StaticLine conn={conn} fromAgent={fromAgent} getPos={getPos} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </group>
+  );
 }
 
 /**
  * 静态知识线
- * 双层圆柱：主线 r=0.01 + 辉光线 r=0.03
- * 颜色跟随 from Agent
  */
-function StaticLink({ from, to, fromColor }) {
-  const curvePoints = useMemo(() => {
-    const fromAgent = getAgent(from);
-    const toAgent = getAgent(to);
-    if (!fromAgent || !toAgent) return [];
-    return getCurvePoints(fromAgent.position, toAgent.position, 0.3);
-  }, [from, to]);
-
-  if (curvePoints.length === 0) return null;
-
-  const curve = new THREE.CatmullRomCurve3(curvePoints);
-
+function StaticLine({ conn, fromAgent, getPos }) {
   return (
     <group>
-      {/* 辉光线 (粗) */}
-      <mesh>
-        <tubeGeometry args={[curve, 32, 0.03, 8, false]} />
-        <meshBasicMaterial
-          color={fromColor || '#4488FF'}
-          transparent
-          opacity={0.06}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-
-      {/* 主线 (细) */}
-      <mesh>
-        <tubeGeometry args={[curve, 32, 0.01, 8, false]} />
-        <meshBasicMaterial
-          color={fromColor || '#4488FF'}
-          transparent
-          opacity={0.25}
-          depthWrite={false}
-        />
-      </mesh>
-
-      {/* 碰撞体（不可见，用于点击交互） */}
-      <mesh>
-        <tubeGeometry args={[curve, 16, 0.15, 6, false]} />
-        <meshBasicMaterial
-          transparent
-          opacity={0}
-          depthWrite={false}
-        />
-      </mesh>
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.01}
+        color={fromAgent.color || '#4488FF'}
+        opacity={0.25}
+      />
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.03}
+        color={fromAgent.color || '#4488FF'}
+        opacity={0.06}
+        blending={THREE.AdditiveBlending}
+      />
+      {/* 碰撞体 */}
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.15}
+        color="#000000"
+        opacity={0}
+      />
     </group>
   );
 }
 
 /**
  * 折叠记忆金线
- * #FFD700 金色 + 外层 #FFAA00 琥珀辉光
- * 线宽随互动次数增长
- * 2.5s easeOutCubic 从零生长
  */
-function MemoryGoldenLine({ from, to, interactionCount = 0, memoryId }) {
-  const groupRef = useRef();
-  const progressRef = useRef(0);
-  const startTimeRef = useRef(Date.now());
-
-  const curvePoints = useMemo(() => {
-    const fromAgent = getAgent(from);
-    const toAgent = getAgent(to);
-    if (!fromAgent || !toAgent) return [];
-    return getCurvePoints(fromAgent.position, toAgent.position, 0.5);
-  }, [from, to]);
-
-  // 线宽随互动次数增长
+function MemoryLine({ conn, fromAgent, getPos }) {
+  const interactionCount = conn.interactionCount || 1;
   const baseWidth = 0.015 + Math.min(interactionCount * 0.005, 0.03);
-
-  useFrame(() => {
-    if (groupRef.current) {
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
-      // 2.5s easeOutCubic
-      const t = Math.min(elapsed / 2.5, 1);
-      progressRef.current = 1 - Math.pow(1 - t, 3);
-
-      // 脉动效果
-      const pulse = 1 + Math.sin(elapsed * 3) * 0.05;
-      groupRef.current.children.forEach((child) => {
-        if (child.material && child.material.uniforms) {
-          child.material.uniforms.progress.value = progressRef.current;
-        }
-      });
-
-      // 整体缩放（脉动）
-      groupRef.current.scale.setScalar(pulse);
-    }
-  });
-
-  if (curvePoints.length === 0) return null;
-
-  const curve = new THREE.CatmullRomCurve3(curvePoints);
+  const memOpacity = 0.25 + (interactionCount - 1) * 0.1;
 
   return (
-    <group ref={groupRef} name={`memory-line-${memoryId}`}>
-      {/* 琥珀外层辉光 */}
-      <mesh>
-        <tubeGeometry args={[curve, 32, baseWidth * 2.5, 8, false]} />
-        <meshBasicMaterial
-          color="#FFAA00"
-          transparent
-          opacity={0.08}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-
-      {/* 金色主线 */}
-      <mesh>
-        <tubeGeometry args={[curve, 40, baseWidth, 8, false]} />
-        <meshBasicMaterial
-          color="#FFD700"
-          transparent
-          opacity={0.7}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-
-      {/* 碰撞体 */}
-      <mesh>
-        <tubeGeometry args={[curve, 16, 0.15, 6, false]} />
-        <meshBasicMaterial
-          transparent
-          opacity={0}
-          depthWrite={false}
-        />
-      </mesh>
+    <group>
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={baseWidth * 2.5}
+        color="#FFAA00"
+        opacity={memOpacity * 0.3}
+        blending={THREE.AdditiveBlending}
+      />
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={baseWidth}
+        color="#FFD700"
+        opacity={memOpacity}
+        blending={THREE.AdditiveBlending}
+      />
+      <ForceTube
+        from={conn.from}
+        to={conn.to}
+        getPos={getPos}
+        radius={0.15}
+        color="#000000"
+        opacity={0}
+      />
     </group>
   );
 }
 
 /**
- * 连线系统主组件
+ * 力导向实时管状连线
  */
-export default function ConnectionLines({ connections = [] }) {
-  // 分离静态知识线和记忆金线
-  const staticLinks = useMemo(() => {
-    return connections.filter((c) => !c.interactionCount || c.interactionCount === 0);
-  }, [connections]);
-
-  const memoryLinks = useMemo(() => {
-    return connections.filter((c) => c.interactionCount && c.interactionCount > 0);
-  }, [connections]);
-
-  return (
-    <group>
-      {/* 静态知识线 */}
-      {staticLinks.map((conn) => {
-        const fromAgent = getAgent(conn.from);
-        return (
-          <StaticLink
-            key={`static-${conn.from}-${conn.to}`}
-            from={conn.from}
-            to={conn.to}
-            fromColor={fromAgent?.color}
-          />
-        );
-      })}
-
-      {/* 折叠记忆金线 */}
-      {memoryLinks.map((conn) => (
-        <MemoryGoldenLine
-          key={`memory-${conn.from}-${conn.to}`}
-          from={conn.from}
-          to={conn.to}
-          interactionCount={conn.interactionCount || 1}
-          memoryId={`${conn.from}-${conn.to}`}
-        />
-      ))}
-    </group>
+function ForceTube({ from, to, getPos, radius, color, opacity, blending }) {
+  const tubeRef = React.useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const geo = useMemo(() => new THREE.CylinderGeometry(radius, radius, 1, 8), [radius]);
+  const mat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        blending: blending || THREE.NormalBlending,
+      }),
+    [color, opacity, blending]
   );
+
+  // 每帧更新位置
+  React.useEffect(() => {
+    if (!getPos) return;
+    const interval = setInterval(() => {
+      if (!tubeRef.current) return;
+      const p1 = getPos(from);
+      const p2 = getPos(to);
+      if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) return;
+
+      const mid = new THREE.Vector3(
+        (p1[0] + p2[0]) / 2,
+        (p1[1] + p2[1]) / 2,
+        (p1[2] + p2[2]) / 2
+      );
+      const dir = new THREE.Vector3(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]);
+      const len = dir.length();
+      const up = new THREE.Vector3(0, 1, 0);
+      const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.normalize());
+
+      tubeRef.current.position.copy(mid);
+      tubeRef.current.quaternion.copy(quat);
+      tubeRef.current.scale.set(1, len, 1);
+    }, 16);
+
+    return () => clearInterval(interval);
+  }, [from, to, getPos]);
+
+  return <mesh ref={tubeRef} geometry={geo} material={mat} />;
 }

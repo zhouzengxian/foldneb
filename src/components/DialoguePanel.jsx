@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import useNebulaStore from '../store/useNebulaStore.js';
-import { getAgent } from '../data/gameData.js';
+import { getAgentById } from '../data/gameData.js';
 import { processDialogue } from '../utils/memoryCrystal.js';
 
 /**
@@ -35,7 +35,7 @@ export default function DialoguePanel() {
   const [targetAgents, setTargetAgents] = useState([]);
   const [dialogueLog, setDialogueLog] = useState([]);
 
-  const agent = selectedAgent ? getAgent(selectedAgent) : null;
+  const agent = selectedAgent ? getAgentById(selectedAgent) : null;
 
   // 获取可对话的朋友列表
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function DialoguePanel() {
   const startDialogue = useCallback((targetId) => {
     if (!selectedAgent) return;
 
-    const target = getAgent(targetId);
+    const target = getAgentById(targetId);
     if (!target) return;
 
     // 处理对话 → 自动提取记忆晶体
@@ -109,7 +109,7 @@ export default function DialoguePanel() {
             {userFriends
               .filter((id) => id !== selectedAgent)
               .map((id) => {
-                const friend = getAgent(id);
+                const friend = getAgentById(id);
                 if (!friend) return null;
                 return (
                   <button

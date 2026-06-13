@@ -1,448 +1,1096 @@
-/**
- * FoldNeb 折叠星云 — 核心数据
- * 4 星系 × 5 位 Agent = 20 位初始思想者
- */
+// ============================================================
+// FoldNeb v3 — 125 明星节点 · 13坊区
+// FoldNeb 折叠星云 · 创始人思想操作系统
+// ============================================================
 
-export const GALAXIES = [
-  {
-    id: 'ai_frontier',
-    name: '科技前沿',
-    nameEn: 'AI Frontier',
-    color: '#4488FF',
-    position: [6, 0.5, 0],
-    description: '人工智能与科技变革的探索者们',
-  },
-  {
-    id: 'thought_source',
-    name: '思想源流',
-    nameEn: 'Thought Source',
-    color: '#8866CC',
-    position: [0, 0.5, 6],
-    description: '东西方智慧的深层源流',
-  },
-  {
-    id: 'strategy_game',
-    name: '战略博弈',
-    nameEn: 'Strategy Game',
-    color: '#D4A520',
-    position: [-6, 0.5, 0],
-    description: '商业与人生的战略大师',
-  },
-  {
-    id: 'solopreneur',
-    name: '一人公司',
-    nameEn: 'Solopreneur',
-    color: '#44BB88',
-    position: [0, 0.5, -6],
-    description: '独立创造者的自由之路',
-  },
-];
-
-export const AGENTS = [
-  // ========== 科技前沿 (ai_frontier) ==========
-  {
-    id: 'jensen_huang',
-    name: '黄仁勋',
-    title: 'GPU教父',
-    emoji: '🚀',
-    galaxy: 'ai_frontier',
-    color: '#3377EE',
-    tier: 1,
-    position: [6.5, 0.8, 0.4],
-    satellites: ['加速计算', 'CUDA生态', 'AI基础设施'],
-    description: 'NVIDIA CEO，GPU帝国缔造者。用30年将一块游戏显卡变成AI时代的算力引擎。',
-    quotes: [
-      '要么你为食物奔跑，要么你成为食物。',
-      '我们不是在预测未来，我们是在发明未来。',
-    ],
-    tags: ['GPU', 'AI计算', '芯片'],
-  },
-  {
-    id: 'elon_musk',
-    name: '埃隆·马斯克',
-    title: '火星梦想家',
-    emoji: '🪐',
-    galaxy: 'ai_frontier',
-    color: '#5599FF',
-    tier: 1,
-    position: [6.8, -0.3, -0.3],
-    satellites: ['SpaceX', 'xAI', '第一性原理'],
-    description: 'SpaceX/Tesla/xAI 创始人，用第一性原理撕开每一个行业的口子。',
-    quotes: [
-      '当一件事足够重要，即使胜算渺茫你也要去做。',
-      '如果事情没有失败，说明你不够创新。',
-    ],
-    tags: ['航天', '电动车', 'AI'],
-  },
-  {
-    id: 'sam_altman',
-    name: 'Sam Altman',
-    title: 'AI布道者',
-    emoji: '🤖',
-    galaxy: 'ai_frontier',
-    color: '#4477DD',
-    tier: 1,
-    position: [5.5, 1.2, 0.8],
-    satellites: ['OpenAI', 'ChatGPT', 'AGI路线图'],
-    description: 'OpenAI CEO，将大语言模型推向十亿用户的人。VC出身，深谙叙事的力量。',
-    quotes: [
-      '你必须对自己非常诚实，知道什么时候该坚持，什么时候该放弃。',
-    ],
-    tags: ['LLM', 'AGI', '创业'],
-  },
-  {
-    id: 'feifei_li',
-    name: '李飞飞',
-    title: 'AI视觉之母',
-    emoji: '👁️',
-    galaxy: 'ai_frontier',
-    color: '#5588DD',
-    tier: 2,
-    position: [6.2, -0.8, 1.0],
-    satellites: ['ImageNet', '计算机视觉', '以人为本AI'],
-    description: '斯坦福教授，ImageNet缔造者。让机器学会"看"世界的人。',
-    quotes: [
-      'AI的终极目标不是取代人类，而是增强人类。',
-    ],
-    tags: ['视觉', '数据集', '学术界'],
-  },
-  {
-    id: 'andrew_ng',
-    name: '吴恩达',
-    title: 'AI教育家',
-    emoji: '📖',
-    galaxy: 'ai_frontier',
-    color: '#3366CC',
-    tier: 2,
-    position: [5.8, 0.3, -1.0],
-    satellites: ['Coursera', 'DeepLearning', 'AI普及'],
-    description: '前百度/谷歌大脑负责人，AI教育布道第一人。让数百万人学会了机器学习。',
-    quotes: [
-      'AI是新的电力，它将改变每一个行业。',
-    ],
-    tags: ['教育', 'ML', '平台'],
-  },
-
-  // ========== 思想源流 (thought_source) ==========
-  {
-    id: 'kevin_kelly',
-    name: '凯文·凯利',
-    title: '科技先知',
-    emoji: '🔮',
-    galaxy: 'thought_source',
-    color: '#9966CC',
-    tier: 1,
-    position: [0.5, 0.5, 6.5],
-    satellites: ['失控', '必然', '科技趋势'],
-    description: '《连线》创始主编，用生物学思维理解技术演化。预言了去中心化、AI和共享经济。',
-    quotes: [
-      '未来已来，只是分布不均。',
-      '技术是生命的第七界。',
-    ],
-    tags: ['未来学', '复杂系统', '技术哲学'],
-  },
-  {
-    id: 'nassim_taleb',
-    name: '塔勒布',
-    title: '黑天鹅猎人',
-    emoji: '🦢',
-    galaxy: 'thought_source',
-    color: '#7744BB',
-    tier: 1,
-    position: [-0.3, 0.8, 6.8],
-    satellites: ['反脆弱', '黑天鹅', '杠铃策略'],
-    description: '《黑天鹅》《反脆弱》作者，用数学和哲学重塑了人们对风险的理解。',
-    quotes: [
-      '反脆弱：在混乱和波动中变得更强。',
-      '不要做那个预测下雨的人，而是建造方舟。',
-    ],
-    tags: ['概率论', '风险管理', '哲学'],
-  },
-  {
-    id: 'daniel_kahneman',
-    name: '丹尼尔·卡尼曼',
-    title: '行为经济学之父',
-    emoji: '🧠',
-    galaxy: 'thought_source',
-    color: '#8855CC',
-    tier: 1,
-    position: [0.8, -0.3, 5.8],
-    satellites: ['思考快与慢', '前景理论', '认知偏差'],
-    description: '诺贝尔经济学奖得主，揭示了人类决策中的系统性偏见。',
-    quotes: [
-      '我们对自己的无知视而不见，而且视而不见得如此彻底。',
-    ],
-    tags: ['心理学', '决策', '偏见'],
-  },
-  {
-    id: 'laozi',
-    name: '老子',
-    title: '道法自然',
-    emoji: '☯️',
-    galaxy: 'thought_source',
-    color: '#6655AA',
-    tier: 1,
-    position: [-0.8, 1.2, 5.5],
-    satellites: ['道德经', '无为', '上善若水'],
-    description: '道家创始人，《道德经》81章道尽宇宙运行的根本法则。',
-    quotes: [
-      '上善若水，水善利万物而不争。',
-      '道生一，一生二，二生三，三生万物。',
-    ],
-    tags: ['道家', '东方哲学', '智慧'],
-  },
-  {
-    id: 'wang_yangming',
-    name: '王阳明',
-    title: '知行合一',
-    emoji: '🌸',
-    galaxy: 'thought_source',
-    color: '#7766BB',
-    tier: 2,
-    position: [0.2, -1.0, 6.2],
-    satellites: ['心即理', '致良知', '事上磨练'],
-    description: '明代心学大师，"知行合一"影响日本明治维新，也是现代行动哲学的东方原型。',
-    quotes: [
-      '知是行之始，行是知之成。',
-      '破山中贼易，破心中贼难。',
-    ],
-    tags: ['心学', '行动哲学', '儒家'],
-  },
-
-  // ========== 战略博弈 (strategy_game) ==========
-  {
-    id: 'sunzi',
-    name: '孙子',
-    title: '兵圣',
-    emoji: '⚔️',
-    galaxy: 'strategy_game',
-    color: '#CCAA44',
-    tier: 1,
-    position: [-6.5, 0.5, 0.5],
-    satellites: ['孙子兵法', '知己知彼', '不战而胜'],
-    description: '《孙子兵法》作者，2500年前的军事智慧至今依然是商业竞争的最高哲学。',
-    quotes: [
-      '知己知彼，百战不殆。',
-      '上兵伐谋，其次伐交，其次伐兵，其下攻城。',
-    ],
-    tags: ['军事', '竞争', '领导力'],
-  },
-  {
-    id: 'peter_thiel',
-    name: '彼得·蒂尔',
-    title: '逆势思考者',
-    emoji: '💡',
-    galaxy: 'strategy_game',
-    color: '#DDBB55',
-    tier: 1,
-    position: [-6.2, 0.8, -0.3],
-    satellites: ['从0到1', '垄断', '逆向思维'],
-    description: 'PayPal联合创始人，《从0到1》作者。教你如何找到别人看不见的秘密。',
-    quotes: [
-      '竞争是给失败者准备的。',
-      '你有什么别人不相信但你认为对的看法？',
-    ],
-    tags: ['创业', '垄断', '思考框架'],
-  },
-  {
-    id: 'charlie_munger',
-    name: '查理·芒格',
-    title: '多元思维模型',
-    emoji: '🧩',
-    galaxy: 'strategy_game',
-    color: '#BB9944',
-    tier: 1,
-    position: [-5.8, -0.3, 0.8],
-    satellites: ['心智模型', '逆向思维', '能力圈'],
-    description: '巴菲特搭档，用100多个思维模型构建了一张无所不包的人类误判心理学之网。',
-    quotes: [
-      '反过来想，总是反过来想。',
-      '得到你想要的东西的最好方法，是让自己配得上它。',
-    ],
-    tags: ['投资', '心理学', '智慧'],
-  },
-  {
-    id: 'su_shimin',
-    name: '苏世民',
-    title: '黑石之王',
-    emoji: '🏰',
-    galaxy: 'strategy_game',
-    color: '#CC9933',
-    tier: 2,
-    position: [-6.8, 1.0, 0.2],
-    satellites: ['黑石集团', '25条原则', '宏图大略'],
-    description: '黑石集团联合创始人，私募股权之王。从零打造了全球最大的另类资产管理公司。',
-    quotes: [
-      '做大事和做小事的难度是一样的，所以选择做大事。',
-    ],
-    tags: ['投资', '领导力', '规模'],
-  },
-  {
-    id: 'naval_ravikant',
-    name: 'Naval Ravikant',
-    title: '财富自由哲学家',
-    emoji: '💰',
-    galaxy: 'strategy_game',
-    color: '#DDAA33',
-    tier: 1,
-    position: [-6.0, -0.8, -0.8],
-    satellites: ['Angellist', '纳瓦尔宝典', '杠杆理论'],
-    description: 'AngelList创始人，硅谷最通透的思想者之一。用140字把财富与幸福讲得比谁都清楚。',
-    quotes: [
-      '用头脑赚钱，而不是用时间。',
-      '幸福是一种选择，也是一种技能。',
-    ],
-    tags: ['投资', '哲学', '致富'],
-  },
-
-  // ========== 一人公司 (solopreneur) ==========
-  {
-    id: 'paul_graham',
-    name: 'Paul Graham',
-    title: '黑客与画家',
-    emoji: '🎨',
-    galaxy: 'solopreneur',
-    color: '#44AA77',
-    tier: 1,
-    position: [0.5, 0.6, -6.5],
-    satellites: ['YC', '做不可规模化的事', 'Lisp'],
-    description: 'Y Combinator 创始人，硅谷教父级人物。用一篇篇散文定义了现代创业精神。',
-    quotes: [
-      '做不可规模化的事。',
-      '最好的创业想法往往看起来像坏主意。',
-    ],
-    tags: ['创业', '写作', 'YC'],
-  },
-  {
-    id: 'pieter_levels',
-    name: 'Pieter Levels',
-    title: '数字游民教主',
-    emoji: '✈️',
-    galaxy: 'solopreneur',
-    color: '#55BB88',
-    tier: 1,
-    position: [-0.3, 0.2, -6.8],
-    satellites: ['NomadList', '12个月12个创业', '独立开发'],
-    description: '12个月做了12个产品，年收入超200万美元的独立开发者。数字游民运动的标志。',
-    quotes: [
-      'Just ship it. 发布比完美重要。',
-      '你是你自己的公司，不要等任何人给你许可。',
-    ],
-    tags: ['独立开发', '远程', '极简创业'],
-  },
-  {
-    id: 'dan_koe',
-    name: 'Dan Koe',
-    title: '现代文艺复兴人',
-    emoji: '✍️',
-    galaxy: 'solopreneur',
-    color: '#44CC99',
-    tier: 2,
-    position: [0.8, -0.5, -6.2],
-    satellites: ['一人商业', '写作变现', '创作者经济'],
-    description: '把写推特变成百万美元生意的一人公司标杆。用哲学+设计+写作的三位一体改变创作者经济。',
-    quotes: [
-      '如果你能用文字改变一个人的思想，你就能用文字改变一千个人。',
-    ],
-    tags: ['创作者', '教育', '个人品牌'],
-  },
-  {
-    id: 'david_perell',
-    name: 'David Perell',
-    title: '写作学校创始人',
-    emoji: '📝',
-    galaxy: 'solopreneur',
-    color: '#338866',
-    tier: 2,
-    position: [-0.8, 1.0, -5.8],
-    satellites: ['Write of Passage', '在线写作', '知识管理'],
-    description: 'Write of Passage 写作学校创始人，教会了数千人用互联网写作建立个人垄断。',
-    quotes: [
-      '互联网奖励那些在网上思考的人。',
-    ],
-    tags: ['写作', '教育', '社区'],
-  },
-  {
-    id: 'marc_andreessen',
-    name: '马克·安德森',
-    title: '软件吞噬世界',
-    emoji: '🌐',
-    galaxy: 'solopreneur',
-    color: '#33AA77',
-    tier: 1,
-    position: [0.0, -0.8, -6.0],
-    satellites: ['a16z', '网景', '软件哲学'],
-    description: '网景浏览器创造者，a16z联合创始人。说出"软件正在吞噬世界"的那个男人。',
-    quotes: [
-      '软件正在吞噬世界。',
-      '乐观主义者创造未来。',
-    ],
-    tags: ['投资', '软件', '未来'],
-  },
-];
-
-/**
- * 初始连线关系（基于已知的师承、合作、影响关系）
- * 每条线对应一个 pairKey，用于记忆晶体生长
- */
-export const INITIAL_CONNECTIONS = [
-  // 科技前沿内部
-  { from: 'jensen_huang', to: 'feifei_li', label: 'GPU驱动视觉革命' },
-  { from: 'jensen_huang', to: 'andrew_ng', label: 'GPU算力赋能ML教育' },
-  { from: 'sam_altman', to: 'elon_musk', label: 'OpenAI始创同盟' },
-  { from: 'feifei_li', to: 'andrew_ng', label: '斯坦福AI学派' },
-
-  // 思想源流内部
-  { from: 'kevin_kelly', to: 'nassim_taleb', label: '复杂系统视角' },
-  { from: 'kevin_kelly', to: 'laozi', label: '道法自然与科技演化' },
-  { from: 'daniel_kahneman', to: 'nassim_taleb', label: '认知偏差与黑天鹅' },
-  { from: 'laozi', to: 'wang_yangming', label: '东方智慧传承' },
-  { from: 'wang_yangming', to: 'nassim_taleb', label: '反脆弱东方原型' },
-
-  // 战略博弈内部
-  { from: 'sunzi', to: 'charlie_munger', label: '兵法与投资心法' },
-  { from: 'peter_thiel', to: 'charlie_munger', label: '逆向思维同盟' },
-  { from: 'naval_ravikant', to: 'charlie_munger', label: '智慧投资哲学' },
-  { from: 'peter_thiel', to: 'naval_ravikant', label: '硅谷思维模型' },
-  { from: 'sunzi', to: 'su_shimin', label: '谋略与商业实战' },
-
-  // 一人公司内部
-  { from: 'paul_graham', to: 'pieter_levels', label: '独立精神传承' },
-  { from: 'pieter_levels', to: 'dan_koe', label: '一人商业进化论' },
-  { from: 'dan_koe', to: 'david_perell', label: '写作商业双螺旋' },
-  { from: 'paul_graham', to: 'marc_andreessen', label: '硅谷创业教父' },
-
-  // 跨星系连线
-  { from: 'kevin_kelly', to: 'marc_andreessen', label: '科技未来预言' },
-  { from: 'nassim_taleb', to: 'naval_ravikant', label: '风险与财富' },
-  { from: 'elon_musk', to: 'peter_thiel', label: 'PayPal黑帮' },
-  { from: 'sunzi', to: 'paul_graham', label: '创业兵法' },
-  { from: 'sam_altman', to: 'paul_graham', label: 'YC掌门传承' },
-  { from: 'laozi', to: 'naval_ravikant', label: '东方智慧x硅谷哲学' },
-  { from: 'jensen_huang', to: 'peter_thiel', label: '芯片地缘政治' },
-];
-
-/**
- * 获取 Agent 完整信息
- */
-export function getAgent(id) {
-  return AGENTS.find((a) => a.id === id);
+// ==================== 工具函数 ====================
+function seededRandom(seed) {
+  let s = seed;
+  return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
 }
 
-/**
- * 获取星系信息
- */
-export function getGalaxy(id) {
-  return GALAXIES.find((g) => g.id === id);
+function hexColor(r, g, b) {
+  return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * 按星系分组 Agent
- */
-export function getAgentsByGalaxy() {
-  const groups = {};
-  GALAXIES.forEach((g) => {
-    groups[g.id] = AGENTS.filter((a) => a.galaxy === g.id);
+function lerpColor(c1, c2, t) {
+  const r1 = parseInt(c1.slice(1,3), 16), g1 = parseInt(c1.slice(3,5), 16), b1 = parseInt(c1.slice(5,7), 16);
+  const r2 = parseInt(c2.slice(1,3), 16), g2 = parseInt(c2.slice(3,5), 16), b2 = parseInt(c2.slice(5,7), 16);
+  return hexColor(r1 + (r2-r1)*t, g1 + (g2-g1)*t, b1 + (b2-b1)*t);
+}
+
+// ==================== 13坊区定义 ====================
+export const districts = [
+  { id: 'ai_frontier',        name: 'AI前沿',     color: '#4488FF', position: [10.5, 0, 0],    radius: 4.5, lanternColor: '#80B8FF' },
+  { id: 'cognition_decision', name: '认知与决策', color: '#FF8C42', position: [9.3, 0, 4.9],    radius: 4.0, lanternColor: '#FFB888' },
+  { id: 'strategy_game',      name: '战略与博弈', color: '#CC4444', position: [6.0, 0, 8.6],    radius: 3.8, lanternColor: '#EE8888' },
+  { id: 'capital_cycle',      name: '资本与周期', color: '#D4A520', position: [1.3, 0, 10.4],   radius: 3.8, lanternColor: '#E8C860' },
+  { id: 'complex_systems',    name: '复杂系统',   color: '#44BB88', position: [-3.7, 0, 9.8],   radius: 3.8, lanternColor: '#80E8B8' },
+  { id: 'network_platform',   name: '网络与平台', color: '#8866CC', position: [-7.9, 0, 7.0],   radius: 3.8, lanternColor: '#B8A0F0' },
+  { id: 'product_design',     name: '产品与设计', color: '#FF66AA', position: [-10.2, 0, 2.5],  radius: 3.5, lanternColor: '#FFAACC' },
+  { id: 'china_contemporary', name: '中国当代',   color: '#DD3333', position: [-10.2, 0, -2.5], radius: 4.5, lanternColor: '#EE6666' },
+  { id: 'thought_source',     name: '思想源流',   color: '#99AACC', position: [-7.9, 0, -7.0],  radius: 4.0, lanternColor: '#CCD8EE' },
+  { id: 'ai_narrative',       name: 'AI叙事场',   color: '#44AADD', position: [-3.7, 0, -9.8],  radius: 4.0, lanternColor: '#88D8F8' },
+  { id: 'cross_domain',       name: '跨界之眼',   color: '#CC8844', position: [1.3, 0, -10.4],  radius: 3.2, lanternColor: '#EEB888' },
+  { id: 'knowledge_hub',      name: '知识枢纽',   color: '#B8C5D6', position: [6.0, 0, -8.6],   radius: 3.2, lanternColor: '#D8E0F0' },
+  { id: 'grassroots_power',   name: '草根力量',   color: '#66BB66', position: [9.3, 0, -4.9],   radius: 5.0, lanternColor: '#90EE90' },
+];
+
+const districtMap = {};
+districts.forEach(d => { districtMap[d.id] = d; });
+
+// 辅助：在坊区圆心附近散布位置
+function scatterPos(cx, cz, r, i, n, hRange) {
+  const angle = (i / n) * Math.PI * 2 + (i * 0.7);
+  const dist = r * (0.25 + 0.6 * ((i % 5) / 5));
+  const h = (Math.sin(i * 1.3) * (hRange || 0.8));
+  return [cx + Math.cos(angle) * dist, h, cz + Math.sin(angle) * dist];
+}
+
+// ==================== Tier 1: 125 明星节点 ====================
+
+// ===== 1. AI前沿 (12人) =====
+const AI_FRONTIER = [
+  {
+    id: 'jensen_huang', name: '黄仁勋', title: 'GPU教父', emoji: '🚀',
+    position: [11.2, 0.4, 0.5], district: 'ai_frontier', color: '#3377EE', tier: 1,
+    description: 'NVIDIA CEO，用CUDA和算力堆出了整个AI时代的基础设施',
+    dialogue: '我们不是在造芯片——是在造计算的新范式。GPU从游戏显卡变成了AI的引擎。十年CUDA，一朝AI爆发——不是运气，是耐心。',
+    satellites: [{ label: 'CUDA', offset: [0.5, 0.25, 0.4] }, { label: 'DGX', offset: [-0.45, -0.2, 0.35] }, { label: 'GPU·算力', offset: [0.05, -0.3, 0.4] }],
+    tags: ['GPU计算','AI基础设施','并行架构'],
+    highlights: ['NVIDIA CEO','2006年all in CUDA','十年验证后AI爆发'],
+  },
+  {
+    id: 'elon_musk', name: 'Elon Musk', title: '第一性原理', emoji: '⚡',
+    position: [10.0, 0.2, -0.6], district: 'ai_frontier', color: '#4488FF', tier: 1,
+    description: 'Tesla/SpaceX/xAI，用物理第一性原理重新定义多个行业',
+    dialogue: 'The first step is to establish that something is possible. Then probability will occur. 最好的流程是没有流程，最好的部门是没有部门。',
+    satellites: [{ label: 'xAI', offset: [0.4, 0.2, 0.35] }, { label: 'Tesla·FSD', offset: [-0.35, -0.15, 0.3] }],
+  },
+  {
+    id: 'sam_altman', name: 'Sam Altman', title: 'OpenAI掌门', emoji: '🤖',
+    position: [10.8, 0.1, -0.2], district: 'ai_frontier', color: '#2266DD', tier: 1,
+    description: '从YC总裁到ChatGPT之父，改变了人类与智能的交互方式',
+    dialogue: 'AGI is not a tool—it\'s a new species. We\'re creating a new form of intelligence. Not stronger computers, but entities that can understand, reason, and create.',
+    satellites: [{ label: 'ChatGPT', offset: [0.45, 0.2, 0.35] }, { label: 'OpenAI', offset: [-0.4, -0.2, 0.4] }],
+    tags: ['AGI','大语言模型','AI安全'],
+  },
+  {
+    id: 'demis_hassabis', name: 'Demis Hassabis', title: 'AlphaFold之父', emoji: '🧬',
+    position: [10.3, -0.1, 0.8], district: 'ai_frontier', color: '#5599FF', tier: 1,
+    description: 'DeepMind创始人，AlphaGo/AlphaFold改变了生物学和AI的边界',
+    dialogue: 'Intelligence is the most powerful tool humanity has. Solving intelligence means solving everything else. AGI is not the end—it\'s the beginning.',
+  },
+  {
+    id: 'yann_lecun', name: 'Yann LeCun', title: '卷积网络之父', emoji: '👁️',
+    position: [11.0, -0.2, -0.3], district: 'ai_frontier', color: '#3377FF', tier: 1,
+    description: 'Meta AI首席科学家，CNN发明者，自监督学习倡导者',
+    dialogue: 'A cat can learn about the world in ways no current AI can. We\'re missing something fundamental. LLMs are not the path to AGI—world models are.',
+  },
+  {
+    id: 'dario_amodei', name: 'Dario Amodei', title: 'Claude缔造者', emoji: '🧠',
+    position: [10.5, 0.3, 0.0], district: 'ai_frontier', color: '#4488FF', tier: 1,
+    description: 'Anthropic CEO，从安全出发再造AI的逆向思考者',
+    dialogue: 'We put safety first, then capability. Constitutional AI is not a technical choice—it\'s an ethical one. AI must learn to say no.',
+  },
+  {
+    id: 'feifei_li', name: '李飞飞', title: 'ImageNet之母', emoji: '🌟',
+    position: [9.8, 0.1, 0.4], district: 'ai_frontier', color: '#5599FF', tier: 1,
+    description: '让计算机学会"看"的华人科学家，AI以人为本的倡导者',
+    dialogue: '计算机视觉不只是让机器识别物体——它关乎机器如何理解人类的世界。AI的未来不是取代人，而是增强人。Human-centered AI。',
+  },
+  {
+    id: 'li_kaifu', name: '李开复', title: 'AI创投教父', emoji: '💡',
+    position: [10.6, 0.0, 1.1], district: 'ai_frontier', color: '#2266CC', tier: 1,
+    description: '创新工场CEO，从微软亚洲研究院到AI投资，见证中国AI崛起',
+    dialogue: 'AI不会取代人，但会用AI的人会取代不会用AI的人。未来十年，最大的机会不是造AI——是用AI重新发明每一个行业。',
+  },
+  {
+    id: 'liang_wenfeng', name: '梁文锋', title: 'DeepSeek创始人', emoji: '🐋',
+    position: [11.3, -0.1, -0.8], district: 'ai_frontier', color: '#1155DD', tier: 1,
+    description: '幻方量化→DeepSeek，用极低成本做出顶级大模型，震惊硅谷',
+    dialogue: '我们不需要跟OpenAI比烧钱。几百张卡也能做出世界级模型——关键在于架构创新，不是算力堆叠。DeepSeek证明了这件事。',
+  },
+  {
+    id: 'andrej_karpathy', name: 'Andrej Karpathy', title: 'AI布道者', emoji: '📖',
+    position: [9.5, 0.2, 0.0], district: 'ai_frontier', color: '#66AAFF', tier: 1,
+    description: '前Tesla AI总监、OpenAI联合创始人，最好的AI教育家',
+    dialogue: 'The best way to learn AI is to build it from scratch. Every line of code you write is a step toward understanding. LLMs are not magic—they\'re math.',
+  },
+  {
+    id: 'geoffrey_hinton', name: 'Geoffrey Hinton', title: '深度学习之父', emoji: '🧪',
+    position: [10.1, 0.3, -0.4], district: 'ai_frontier', color: '#4488EE', tier: 1,
+    description: '图灵奖得主，反向传播算法和深度学习的奠基人',
+    dialogue: 'I used to think we had 30-50 years before AGI. Now I think it might be much sooner. Digital intelligence is not like biological intelligence—it can share knowledge instantly.',
+  },
+  {
+    id: 'andrew_ng', name: 'Andrew Ng', title: 'AI教育家', emoji: '🎓',
+    position: [10.4, 0.0, -1.0], district: 'ai_frontier', color: '#5599EE', tier: 1,
+    description: 'Coursera联合创始人、Google Brain发起者、AI民主化的旗手',
+    dialogue: 'AI is the new electricity. Just as electricity transformed every industry, AI will do the same. My mission is to make AI education accessible to everyone.',
+  },
+];
+
+// ===== 2. 认知与决策 (10人) =====
+const COGNITION_DECISION = [
+  {
+    id: 'kahneman', name: '卡尼曼', title: '行为经济学之父', emoji: '🧠',
+    position: [9.0, 0.2, 5.2], district: 'cognition_decision', color: '#EE7C32', tier: 1,
+    description: '思考快与慢的作者，揭示了人类决策的系统性偏差',
+    dialogue: '你的大脑有两个系统：系统1快速直觉，系统2缓慢理性。问题是——系统1太自信了，它以为自己用的是系统2。',
+    satellites: [{ label: '快思慢想', offset: [0.45, 0.2, 0.35] }, { label: '前景理论', offset: [-0.4, -0.2, 0.4] }],
+  },
+  {
+    id: 'charlie_munger', name: '芒格', title: '多元思维模型', emoji: '🧩',
+    position: [9.5, 0.1, 4.6], district: 'cognition_decision', color: '#FF8C42', tier: 1,
+    description: '伯克希尔副董事长，用100个思维模型来理解世界的投资大师',
+    dialogue: '拿着锤子的人看什么都像钉子。你需要的不止一把锤子——你需要一个工具箱。心理学、物理学、生物学、历史——每个学科都给你一个看待问题的新角度。',
+    satellites: [{ label: '穷查理宝典', offset: [0.5, 0.2, 0.4] }, { label: '多元模型', offset: [-0.4, -0.2, 0.35] }],
+  },
+  {
+    id: 'nassim_taleb', name: '塔勒布', title: '黑天鹅之父', emoji: '🦢',
+    position: [8.6, -0.1, 5.5], district: 'cognition_decision', color: '#DD6C22', tier: 1,
+    description: '反脆弱——有些东西在混乱中变得更强大',
+    dialogue: 'The Black Swan is not about predicting—it\'s about preparing. 风会熄灭蜡烛，却会让火越烧越旺。你要做火，不要做蜡烛。',
+    satellites: [{ label: '黑天鹅', offset: [0.5, 0.2, 0.4] }, { label: '反脆弱', offset: [-0.4, -0.25, 0.35] }],
+    tags: ['不确定性','风险哲学','概率思维'],
+    highlights: ['《黑天鹅》定义极端事件','《反脆弱》：混乱中获益'],
+  },
+  {
+    id: 'hofstadter', name: '侯世达', title: 'GEB作者', emoji: '🔄',
+    position: [9.8, 0.0, 4.2], district: 'cognition_decision', color: '#EE8838', tier: 1,
+    description: '哥德尔艾舍尔巴赫的奇书作者，探索意识和自指的边界',
+    dialogue: 'I am a strange loop. 意识不是某种神秘的物质——它是符号系统在"回头看自己"时产生的幻觉。你之所以觉得"你"存在，是因为你的大脑正在模拟它自己。',
+  },
+  {
+    id: 'steven_pinker', name: 'Steven Pinker', title: '认知科学家', emoji: '📊',
+    position: [9.2, -0.2, 4.9], district: 'cognition_decision', color: '#FF7C32', tier: 1,
+    description: '哈佛心理学教授，用数据和理性论证世界在变好',
+    dialogue: 'We are living in the most peaceful, prosperous time in human history—but our news feeds tell us the opposite. Data beats anecdotes.',
+  },
+  {
+    id: 'morgan_housel', name: 'Morgan Housel', title: '金钱心理学', emoji: '💰',
+    position: [9.6, 0.1, 5.8], district: 'cognition_decision', color: '#CC6C22', tier: 1,
+    description: '《金钱心理学》作者，用故事揭示理财背后的人性',
+    dialogue: 'Financial success is not about what you know—it\'s about how you behave. Getting rich and staying rich are two completely different skills.',
+  },
+  {
+    id: 'sam_harris', name: 'Sam Harris', title: '清醒思考', emoji: '🧘',
+    position: [8.8, 0.2, 4.5], district: 'cognition_decision', color: '#FF9944', tier: 1,
+    description: '神经科学家与冥想倡导者，理性与灵性的桥梁',
+    dialogue: 'The self is an illusion. But it\'s a very useful illusion. The question is not whether to think—it\'s whether you\'re aware that you\'re thinking.',
+  },
+  {
+    id: 'annie_duke', name: '安妮·杜克', title: '决策扑克手', emoji: '🃏',
+    position: [9.3, -0.1, 5.0], district: 'cognition_decision', color: '#FF8844', tier: 1,
+    description: '从世界扑克冠军到决策科学专家，用贝叶斯思维做决策',
+    dialogue: 'A good decision can have a bad outcome. A bad decision can have a good outcome. Judge the process, not the result. That\'s the only thing you control.',
+  },
+  {
+    id: 'herbert_simon', name: '赫伯特·西蒙', title: '有限理性', emoji: '🏆',
+    position: [8.5, 0.0, 5.3], district: 'cognition_decision', color: '#EE7733', tier: 1,
+    description: '诺贝尔经济学奖与图灵奖双料得主，有限理性与人工智能先驱',
+    dialogue: 'You cannot be "fully rational"—you don\'t have infinite time or information. So you satisfice: you find a solution that\'s "good enough", not perfect. That\'s not a flaw—that\'s being human.',
+  },
+  {
+    id: 'cialdini', name: '西奥迪尼', title: '影响力之父', emoji: '🎯',
+    position: [8.9, 0.1, 4.3], district: 'cognition_decision', color: '#FF8040', tier: 1,
+    description: '影响力六大原则的发现者，揭示了说服的科学',
+    dialogue: '影响力不是操纵——是理解人类决策的捷径。互惠、承诺一致、社会认同、喜好、权威、稀缺——这六条原则在你没意识到的时候已经在影响你。',
+  },
+];
+
+// ===== 3. 战略与博弈 (8人) =====
+const STRATEGY_GAME = [
+  {
+    id: 'sunzi', name: '孙子', title: '兵法圣哲', emoji: '⚔️',
+    position: [6.4, 0.2, 8.9], district: 'strategy_game', color: '#BB3333', tier: 1,
+    description: '《孙子兵法》——2500年后仍是全球商学院的必读教材',
+    dialogue: '兵者，诡道也。故能而示之不能，用而示之不用。知己知彼，百战不殆。知天知地，胜乃可全。',
+    satellites: [{ label: '孙子兵法', offset: [0.5, 0.2, 0.4] }, { label: '知己知彼', offset: [-0.4, -0.2, 0.35] }],
+  },
+  {
+    id: 'michael_porter', name: '迈克尔·波特', title: '竞争战略之父', emoji: '📈',
+    position: [5.6, 0.1, 8.3], district: 'strategy_game', color: '#CC4444', tier: 1,
+    description: '五力模型与价值链分析的创造者，定义了现代企业战略',
+    dialogue: 'Strategy is about choosing what NOT to do. If there is no trade-off, there is no strategy. The essence of strategy is choosing a unique position.',
+  },
+  {
+    id: 'clayton_christensen', name: '克里斯坦森', title: '颠覆式创新', emoji: '💥',
+    position: [6.0, -0.1, 8.6], district: 'strategy_game', color: '#DD3333', tier: 1,
+    description: '《创新者的窘境》作者，解释了为什么大公司会被小公司颠覆',
+    dialogue: 'Good management was the most powerful reason they failed. They did everything right—listened to customers, invested in the best technology—and still lost.',
+  },
+  {
+    id: 'peter_thiel', name: 'Peter Thiel', title: '从0到1', emoji: '🔮',
+    position: [5.8, 0.0, 9.1], district: 'strategy_game', color: '#AA2222', tier: 1,
+    description: 'PayPal黑帮教父，用逆向思维做投资和创业',
+    dialogue: 'What important truth do very few people agree with you on? If your answer is something everyone believes, you\'re not thinking hard enough.',
+  },
+  {
+    id: 'thomas_schelling', name: '托马斯·谢林', title: '博弈论大师', emoji: '🎮',
+    position: [6.3, -0.2, 8.1], district: 'strategy_game', color: '#CC3333', tier: 1,
+    description: '诺贝尔经济学奖得主，用博弈论解释冲突与合作',
+    dialogue: 'The power to constrain an adversary may depend on the power to bind oneself. Sometimes the strongest move is to limit your own options.',
+  },
+  {
+    id: 'john_boyd', name: 'John Boyd', title: 'OODA循环', emoji: '🔄',
+    position: [5.5, 0.2, 8.8], district: 'strategy_game', color: '#BB4444', tier: 1,
+    description: '战斗机飞行员出身的战略思想家，OODA循环的创造者',
+    dialogue: 'Observe, Orient, Decide, Act—then do it again faster than your opponent. Speed of iteration beats perfection. The one who cycles OODA fastest controls the engagement.',
+  },
+  {
+    id: 'schumpeter', name: '熊彼特', title: '创造性破坏', emoji: '🌪️',
+    position: [6.1, 0.1, 8.4], district: 'strategy_game', color: '#CC2222', tier: 1,
+    description: '经济学大师，创造性破坏理论的提出者',
+    dialogue: 'Capitalism\'s engine is creative destruction. The old must be destroyed for the new to emerge. The entrepreneur is the agent of this destruction.',
+  },
+  {
+    id: 'jim_collins', name: '吉姆·柯林斯', title: '基业长青', emoji: '🏛️',
+    position: [5.7, -0.1, 8.0], district: 'strategy_game', color: '#DD4444', tier: 1,
+    description: '《从优秀到卓越》《基业长青》作者，研究伟大公司的基因',
+    dialogue: 'Good is the enemy of great. Most companies never become great precisely because they are quite good—and that\'s exactly their problem.',
+  },
+];
+
+// ===== 4. 资本与周期 (8人) =====
+const CAPITAL_CYCLE = [
+  {
+    id: 'shen_nanpeng', name: '沈南鹏', title: '红杉中国掌门', emoji: '🔴',
+    position: [1.8, 0.2, 10.6], district: 'capital_cycle', color: '#C49510', tier: 1,
+    description: '红杉中国创始人，中国最具影响力的投资人',
+    dialogue: '投资看人、看赛道、看时机——三者缺一不可。但在中国，timing比美国重要得多。错过了窗口期，再好的团队也白搭。',
+  },
+  {
+    id: 'marc_andreessen', name: 'Marc Andreessen', title: '软件吞噬世界', emoji: '🌐',
+    position: [1.0, 0.1, 10.2], district: 'capital_cycle', color: '#D4A520', tier: 1,
+    description: 'a16z联合创始人，从Netscape到Web3的连续洞见者',
+    dialogue: 'Software is eating the world. Every company will become a software company. AI is the next wave—and it will eat software.',
+  },
+  {
+    id: 'naval_ravikant', name: 'Naval Ravikant', title: '财富哲学', emoji: '🧘',
+    position: [0.8, -0.1, 10.8], district: 'capital_cycle', color: '#C4A010', tier: 1,
+    description: 'AngelList创始人，硅谷最深刻的财富和幸福哲学家',
+    dialogue: 'Seek wealth, not money. Wealth is assets that earn while you sleep. Code and media are the new leverage—you can create them once and sell them forever.',
+  },
+  {
+    id: 'ray_dalio', name: 'Ray Dalio', title: '原则作者', emoji: '🌊',
+    position: [1.3, 0.0, 10.0], district: 'capital_cycle', color: '#E4B530', tier: 1,
+    description: '桥水基金创始人，用宏观经济周期理解世界的对冲大师',
+    dialogue: 'The economy is like a machine. Understand the machine, and you can predict its movements. Pain + Reflection = Progress.',
+  },
+  {
+    id: 'balaji_srinivasan', name: 'Balaji', title: '网络国家', emoji: '🗺️',
+    position: [1.0, 0.3, 10.4], district: 'capital_cycle', color: '#B49010', tier: 1,
+    description: '前Coinbase CTO，《网络国家》作者，区块链与去中心化的布道者',
+    dialogue: 'The nation-state is a software problem. We can fork countries like we fork code. The network state is the next form of human organization.',
+  },
+  {
+    id: 'bill_gurley', name: 'Bill Gurley', title: '独角兽猎人', emoji: '🦄',
+    position: [1.6, -0.1, 10.1], district: 'capital_cycle', color: '#D4B020', tier: 1,
+    description: 'Benchmark合伙人，投资了Uber、Zillow、Grubhub的早期捕获者',
+    dialogue: 'Great markets make great companies. A great team in a terrible market will still fail. Find the tailwind.',
+  },
+  {
+    id: 'vinod_khosla', name: 'Vinod Khosla', title: '技术极端派', emoji: '🔧',
+    position: [0.6, 0.1, 10.5], district: 'capital_cycle', color: '#C4A515', tier: 1,
+    description: 'Khosla Ventures创始人，用极端技术主义做投资',
+    dialogue: 'Most people overestimate what can be done in 2 years and underestimate what can be done in 10. I invest in what seems impossible today.',
+  },
+  {
+    id: 'fang_aizhi', name: '方爱之', title: '真格CEO', emoji: '🌟',
+    position: [1.5, 0.0, 10.3], district: 'capital_cycle', color: '#E4C040', tier: 1,
+    description: '真格基金CEO，中国早期投资的女掌门',
+    dialogue: '投人，不投项目。早期创业最稀缺的不是钱、不是idea——是能把事情做出来的那个人。',
+  },
+];
+
+// ===== 5. 复杂系统 (8人) =====
+const COMPLEX_SYSTEMS = [
+  {
+    id: 'geoffrey_west', name: 'Geoffrey West', title: '规模法则', emoji: '📏',
+    position: [-3.3, 0.2, 10.0], district: 'complex_systems', color: '#33AA77', tier: 1,
+    description: '生物、城市、公司——一切生命系统都遵循同一个幂律',
+    dialogue: '城市比生物体更令人惊讶——你放大一个城市到两倍规模，每个人的收入和创意产出会增长15%。城市是永不停止的引擎。',
+  },
+  {
+    id: 'stuart_kauffman', name: 'Stuart Kauffman', title: '自组织临界', emoji: '🧬',
+    position: [-3.8, 0.0, 9.5], district: 'complex_systems', color: '#44BB88', tier: 1,
+    description: '圣塔菲研究所元老，秩序出于混沌的自组织理论先驱',
+    dialogue: 'Life is not an accident—it\'s an expected emergent property of complex chemical systems. Order arises for free.',
+  },
+  {
+    id: 'kevin_kelly', name: 'Kevin Kelly', title: '失控作者', emoji: '🌐',
+    position: [-4.1, 0.1, 10.3], district: 'complex_systems', color: '#22AA66', tier: 1,
+    description: '失控、科技想要什么、必然——互联网时代的三大预言',
+    dialogue: '科技不是人类发明的工具——它是有自己意志的第七界生命。蜂群、神经网络、全球经济——同一种涌现逻辑在起作用。',
+    satellites: [{ label: '失控', offset: [0.45, 0.2, 0.35] }, { label: '必然', offset: [-0.4, -0.25, 0.4] }],
+    tags: ['科技哲学','涌现理论','Wired杂志'],
+  },
+  {
+    id: 'donella_meadows', name: 'Donella Meadows', title: '系统思考', emoji: '🔄',
+    position: [-3.5, -0.1, 9.7], district: 'complex_systems', color: '#55CC99', tier: 1,
+    description: '《增长的极限》作者，系统动力学与杠杆点理论的奠基人',
+    dialogue: 'The most effective leverage point in any system is to change its paradigm. Don\'t fix the problem—change how people think about the problem.',
+  },
+  {
+    id: 'stephen_wolfram', name: 'Stephen Wolfram', title: '计算宇宙', emoji: '⚛️',
+    position: [-3.0, 0.2, 10.1], district: 'complex_systems', color: '#33BB77', tier: 1,
+    description: 'Mathematica/Wolfram Alpha创始人，用计算规则解释宇宙',
+    dialogue: 'The universe is a computation. Simple rules create immense complexity. Rule 30 proves that determinism and unpredictability can coexist.',
+  },
+  {
+    id: 'john_holland', name: 'John Holland', title: '遗传算法之父', emoji: '🧬',
+    position: [-4.3, -0.2, 9.9], district: 'complex_systems', color: '#44BB77', tier: 1,
+    description: '遗传算法和分类器系统的发明者，复杂适应系统理论的奠基人',
+    dialogue: 'Innovation is not designed—it emerges from variation, selection, and recombination. The same algorithm drives evolution, markets, and ideas.',
+  },
+  {
+    id: 'duncan_watts', name: 'Duncan Watts', title: '六度分隔', emoji: '🕸️',
+    position: [-3.7, 0.1, 9.3], district: 'complex_systems', color: '#66DD99', tier: 1,
+    description: '六度分隔理论的实验验证者和网络科学先驱',
+    dialogue: 'Everything is obvious once you know the answer. The problem is that we don\'t know which answer is right until after the fact.',
+  },
+  {
+    id: 'barabasi', name: 'Barabási', title: '无标度网络', emoji: '📡',
+    position: [-4.0, 0.0, 10.5], district: 'complex_systems', color: '#33AA88', tier: 1,
+    description: '网络科学之父，无标度网络和优先连接的发现者',
+    dialogue: 'Networks are not random—they follow power laws. The rich get richer. A few hubs dominate everything. That\'s not unfair—that\'s physics.',
+  },
+];
+
+// ===== 6. 网络与平台 (8人) =====
+const NETWORK_PLATFORM = [
+  {
+    id: 'tim_berners_lee', name: 'Tim Berners-Lee', title: '万维网之父', emoji: '🕸️',
+    position: [-7.5, 0.2, 7.3], district: 'network_platform', color: '#7755BB', tier: 1,
+    description: '发明了WWW却放弃了专利的人，Solid协议推动数据主权',
+    dialogue: 'This is for everyone. 我发明Web的时候，没想过它会被用来贩卖隐私。互联网的初心是连接——不是操控。',
+  },
+  {
+    id: 'vitalik_buterin', name: 'Vitalik Buterin', title: '以太坊创始人', emoji: '💎',
+    position: [-8.2, 0.1, 6.7], district: 'network_platform', color: '#8866CC', tier: 1,
+    description: '以太坊创始人，用智能合约重新定义了互联网的信任层',
+    dialogue: 'Blockchain is not about money—it\'s about coordination. We\'re building the infrastructure for a new kind of human cooperation.',
+  },
+  {
+    id: 'satoshi_nakamoto', name: 'Satoshi Nakamoto', title: '比特币创造者', emoji: '🪙',
+    position: [-7.8, -0.1, 7.0], district: 'network_platform', color: '#9966CC', tier: 1,
+    description: '比特币白皮书作者，用去中心化共识解决了双花问题',
+    dialogue: 'A purely peer-to-peer version of electronic cash would allow online payments to be sent directly from one party to another.',
+  },
+  {
+    id: 'reid_hoffman', name: 'Reid Hoffman', title: 'LinkedIn创始人', emoji: '🔗',
+    position: [-8.0, 0.2, 6.4], district: 'network_platform', color: '#7755AA', tier: 1,
+    description: 'LinkedIn联合创始人，PayPal黑帮成员，网络效应理论实践者',
+    dialogue: 'The fastest way to change yourself is to hang out with people who are already the way you want to be. Your network is your destiny.',
+  },
+  {
+    id: 'benedict_evans', name: 'Benedict Evans', title: '科技分析师', emoji: '📊',
+    position: [-7.3, 0.0, 7.5], district: 'network_platform', color: '#9977CC', tier: 1,
+    description: 'a16z前合伙人，用年度报告描绘科技趋势的最佳观察者',
+    dialogue: 'Mobile is eating the world, but AI is eating mobile. Every new platform starts looking like a toy, and then it changes everything.',
+  },
+  {
+    id: 'clay_shirky', name: 'Clay Shirky', title: '人人时代', emoji: '👥',
+    position: [-8.4, -0.2, 6.9], district: 'network_platform', color: '#8866BB', tier: 1,
+    description: '《人人时代》作者，认知盈余和群体协作的理论家',
+    dialogue: 'The internet is the first medium in history that has native support for groups. The real revolution is not about information—it\'s about coordination.',
+  },
+  {
+    id: 'wang_jianshuo', name: '王建硕', title: '百姓网创始人', emoji: '🏠',
+    position: [-7.6, 0.1, 7.7], district: 'network_platform', color: '#7755CC', tier: 1,
+    description: '百姓网创始人，中国分类信息先驱，从互联网泡沫存活至今',
+    dialogue: '互联网没有秘密。所有商业模式最终都会透明。护城河不是信息不对称——是你比别人更了解用户。',
+  },
+  {
+    id: 'lan_xi', name: '阑夕', title: '科技评论家', emoji: '✍️',
+    position: [-8.1, -0.1, 7.2], district: 'network_platform', color: '#9977DD', tier: 1,
+    description: '知名科技自媒体，用深度长文剖解互联网公司战略',
+    dialogue: '大多数科技评论都在追逐热点——但真正有价值的分析是找到热点背后的那个"不变"的东西。',
+  },
+];
+
+// ===== 7. 产品与设计 (6人) =====
+const PRODUCT_DESIGN = [
+  {
+    id: 'dieter_rams', name: 'Dieter Rams', title: '十大设计原则', emoji: '📻',
+    position: [-10.5, 0.2, 2.8], district: 'product_design', color: '#EE5599', tier: 1,
+    description: '博朗传奇设计师，Less but better——影响了苹果的一切',
+    dialogue: 'Good design is as little design as possible. 好的设计就像好的仆人——它帮你把事情做完，然后安静地退到背景里。',
+  },
+  {
+    id: 'zhang_xiaolong', name: '张小龙', title: '微信之父', emoji: '💬',
+    position: [-9.8, 0.1, 2.3], district: 'product_design', color: '#FF66AA', tier: 1,
+    description: '从Foxmail到微信，用极简哲学定义了十亿人的数字生活',
+    dialogue: '好的产品是让用户用完即走——不是不想让他们多待，而是你帮他们高效地完成了事情。善良比聪明更重要。',
+  },
+  {
+    id: 'don_norman', name: 'Don Norman', title: '设计心理学', emoji: '🚪',
+    position: [-10.2, -0.1, 2.0], district: 'product_design', color: '#DD4488', tier: 1,
+    description: '《设计心理学》作者，先用后思的用户体验教父',
+    dialogue: 'If you need a sign to explain how a door works, the door is badly designed. Good design makes the right action obvious.',
+  },
+  {
+    id: 'jony_ive', name: 'Jony Ive', title: '苹果设计灵魂', emoji: '🍎',
+    position: [-10.0, 0.0, 2.5], district: 'product_design', color: '#FF5588', tier: 1,
+    description: 'iMac、iPhone、Apple Park——让科技变得有温度',
+    dialogue: 'We don\'t design products—we design experiences. A product\'s most successful moment is when the user forgets it exists.',
+  },
+  {
+    id: 'bret_victor', name: 'Bret Victor', title: '交互魔法师', emoji: '✨',
+    position: [-9.6, 0.2, 2.7], district: 'product_design', color: '#EE6699', tier: 1,
+    description: 'Dynamicland创始人，创造了最激进的编程和交互范式',
+    dialogue: 'The most important thing about a tool is not what it does—it\'s what it lets you think about. We need tools that let us see what we\'re doing.',
+  },
+  {
+    id: 'hara_kenya', name: '原研哉', title: 'MUJI艺术总监', emoji: '🪷',
+    position: [-9.9, -0.2, 2.9], district: 'product_design', color: '#DD5599', tier: 1,
+    description: '无印良品艺术总监，把禅意美学注入日常生活',
+    dialogue: '设计不是创造"新东西"——是发现"本来就在那里的东西"。空（Emptiness）不是什么都没有，是充满了可能性。',
+  },
+];
+
+// ===== 8. 中国当代力量 (13人) =====
+const CHINA_CONTEMPORARY = [
+  {
+    id: 'lei_jun', name: '雷军', title: '小米/造车', emoji: '📱',
+    position: [-10.8, 0.3, -1.8], district: 'china_contemporary', color: '#CC2222', tier: 1,
+    description: '小米创始人，从手机到造车，用极致性价比改变中国制造业',
+    dialogue: 'Are you OK? 站在风口上，猪都能飞起来。但风停了之后，只有长翅膀的才能继续飞。小米从手机到汽车，不是在追风口——是在长出翅膀。',
+  },
+  {
+    id: 'zhang_yiming', name: '张一鸣', title: '算法/全球化', emoji: '🎯',
+    position: [-10.3, 0.1, -2.2], district: 'china_contemporary', color: '#DD3333', tier: 1,
+    description: '字节跳动创始人，用推荐算法重塑了全球内容分发',
+    dialogue: '延迟满足感。最有价值的东西往往需要最长时间来建设。不着急，先把基础打好。',
+  },
+  {
+    id: 'ma_huateng', name: '马化腾', title: '腾讯AI', emoji: '🐧',
+    position: [-9.6, 0.0, -2.0], district: 'china_contemporary', color: '#BB2222', tier: 1,
+    description: '腾讯创始人，从QQ到微信再到AI大模型，持续穿越周期',
+    dialogue: '巨人倒下的时候，身上还是热的。互联网行业没有永远的安全感——只有永远的战战兢兢。',
+  },
+  {
+    id: 'wang_xing', name: '王兴', title: '美团/无限游戏', emoji: '🍚',
+    position: [-10.1, -0.1, -2.8], district: 'china_contemporary', color: '#EE3333', tier: 1,
+    description: '美团创始人，从千团大战杀出的无限游戏玩家',
+    dialogue: '大多数人为了逃避真正的思考，愿意做任何事。创业不是有限游戏——是无限游戏。活下来的目的不是赢，是继续玩。',
+  },
+  {
+    id: 'huang_zheng', name: '黄峥', title: 'Temu/供应链', emoji: '📦',
+    position: [-9.8, 0.2, -3.0], district: 'china_contemporary', color: '#CC3333', tier: 1,
+    description: '拼多多创始人，用社交裂变和极致低价改变了电商格局',
+    dialogue: '下沉市场不是"低端市场"——是用更聪明的方式服务更多人。拼多多的本质是：把广告费省下来返给消费者。',
+  },
+  {
+    id: 'wang_chuanfu', name: '王传福', title: '比亚迪/新能源', emoji: '🔋',
+    position: [-10.5, 0.0, -2.5], district: 'china_contemporary', color: '#DD2222', tier: 1,
+    description: '比亚迪创始人，从电池到电动车，中国新能源的旗手',
+    dialogue: '中国不缺技术，不缺人才——缺的是把技术和人才组织起来做成产品的信心。BYD证明了"中国制造"可以是世界第一。',
+  },
+  {
+    id: 'zhihui_jun', name: '稚晖君', title: '智元机器人', emoji: '🤖',
+    position: [-9.4, 0.1, -1.6], district: 'china_contemporary', color: '#EE4444', tier: 1,
+    description: '彭志辉，"野生钢铁侠"，从华为天才少年到智元机器人创始人',
+    dialogue: '我不觉得自己是天才——我只是比别人花了更多时间做自己真正喜欢的事。兴趣是最好的老师，也是最持久的燃料。',
+  },
+  {
+    id: 'yang_zhilin', name: '杨植麟', title: '月之暗面Kimi', emoji: '🌙',
+    position: [-10.6, -0.2, -1.4], district: 'china_contemporary', color: '#CC1111', tier: 1,
+    description: '月之暗面创始人，Kimi大模型估值200亿，清华系AI新星',
+    dialogue: '长上下文不是技术噱头——是让AI真正理解用户意图的基础。Kimi能读20万字的小说，不是因为参数多，是因为架构对了。',
+  },
+  {
+    id: 'wang_xingxing', name: '王兴兴', title: '宇树科技', emoji: '🦿',
+    position: [-9.7, -0.1, -1.2], district: 'china_contemporary', color: '#DD4444', tier: 1,
+    description: '宇树科技创始人，人形机器人IPO，中国版波士顿动力',
+    dialogue: '机器人不是实验室里的玩具——是未来十年最大的产业机会之一。当人形机器人的成本降到一辆车的价格，世界就会改变。',
+  },
+  {
+    id: 'yu_hao', name: '俞浩', title: '追觅科技', emoji: '🌪️',
+    position: [-9.3, 0.2, -2.4], district: 'china_contemporary', color: '#EE2222', tier: 1,
+    description: '追觅科技创始人，全球清洁机器人第一，跨界造车',
+    dialogue: '全世界最优秀的工程师在中国。追觅的目标不是做"中国版戴森"——是让戴森的用户转过来用追觅。',
+  },
+  {
+    id: 'yan_junjie', name: '闫俊杰', title: 'MiniMax', emoji: '🎙️',
+    position: [-10.2, -0.1, -3.2], district: 'china_contemporary', color: '#CC4444', tier: 1,
+    description: 'MiniMax创始人，港股上市估值3000亿，语音AI第一股',
+    dialogue: '语音是人类最自然的交互方式。当AI能像人一样流畅对话，所有的APP交互方式都会被重写。',
+  },
+  {
+    id: 'zhang_peng', name: '张鹏', title: '智谱AI', emoji: '🏛️',
+    position: [-9.5, 0.0, -3.4], district: 'china_contemporary', color: '#DD1111', tier: 1,
+    description: '智谱AI CEO，清华系AI上市公司，GLM大模型体系',
+    dialogue: '中国AI不能只做"追随者"——要有自己的基础模型。GLM的路线和GPT不同，但我们有信心走出一条独立的技术路径。',
+  },
+  {
+    id: 'jiang_daxin', name: '姜大昕', title: '阶跃星辰', emoji: '⭐',
+    position: [-10.4, 0.1, -3.0], district: 'china_contemporary', color: '#EE3333', tier: 1,
+    description: '阶跃星辰创始人，前微软亚洲研究院副院长',
+    dialogue: '从微软到创业，大模型赛道才刚刚开始。Step-2证明了中国团队在推理能力上可以做得不比任何人差。',
+  },
+];
+
+// ===== 9. 思想源流 (10人) =====
+const THOUGHT_SOURCE = [
+  {
+    id: 'zhuangzi', name: '庄子', title: '逍遥哲人', emoji: '🦋',
+    position: [-8.5, 0.3, -7.0], district: 'thought_source', color: '#8899BB', tier: 1,
+    description: '梦蝶的哲人，齐物论逍遥游，以寓言解构一切确定性',
+    dialogue: '子非鱼，安知鱼之乐？子非我，安知我不知鱼之乐？天地与我并生，万物与我为一。北冥之鱼化为鹏鸟——不是换了物种，是本来的形状找到了更大的空间。',
+    satellites: [{ label: '逍遥游', offset: [0.5, 0.3, 0.35] }, { label: '齐物论', offset: [-0.4, 0.15, 0.4] }, { label: '庄周梦蝶', offset: [0.1, -0.35, 0.45] }],
+    tags: ['道家','相对主义','寓言哲学'],
+  },
+  {
+    id: 'wangyangming', name: '王阳明', title: '心学宗师', emoji: '❤️',
+    position: [-7.5, 0.2, -7.3], district: 'thought_source', color: '#99AACC', tier: 1,
+    description: '知行合一的心学大家，龙场悟道，致良知',
+    dialogue: '你未看此花时，此花与汝心同归于寂。你来看此花时，则此花颜色一时明白起来。致良知——在所有人的声音中找到自己内心的那个锚。',
+    satellites: [{ label: '传习录', offset: [0.5, 0.2, 0.4] }, { label: '致良知', offset: [-0.4, -0.25, 0.35] }],
+    tags: ['心学','儒家','知行合一'],
+  },
+  {
+    id: 'huineng', name: '慧能', title: '禅宗六祖', emoji: '🌸',
+    position: [-8.2, -0.1, -6.6], district: 'thought_source', color: '#AABBCC', tier: 1,
+    description: '不识字却能直指人心，菩提本无树的顿悟者',
+    dialogue: '不是风动，不是幡动，仁者心动。本来无一物，何处惹尘埃？禅不在文字中，在你此刻的呼吸里。',
+  },
+  {
+    id: 'laozi', name: '老子', title: '道法自然', emoji: '☯️',
+    position: [-7.8, 0.1, -7.5], district: 'thought_source', color: '#8899AA', tier: 1,
+    description: '《道德经》作者，道家创始人，上善若水的智慧',
+    dialogue: '道可道，非常道。名可名，非常名。无为而无不为。天下莫柔弱于水，而攻坚强者莫之能胜。',
+    satellites: [{ label: '道德经', offset: [0.4, 0.2, 0.35] }, { label: '无为', offset: [-0.35, -0.2, 0.4] }],
+  },
+  {
+    id: 'hanfeizi', name: '韩非子', title: '法家集大成', emoji: '⚖️',
+    position: [-7.3, -0.2, -6.9], district: 'thought_source', color: '#7788AA', tier: 1,
+    description: '法家思想的集大成者，以制度和法治替代人治',
+    dialogue: '国无常强，无常弱。奉法者强则国强，奉法者弱则国弱。治国不是靠道德感化——是靠制度设计让人作恶的代价大于作恶的收益。',
+  },
+  {
+    id: 'deleuze', name: '德勒兹', title: '块茎哲学家', emoji: '🌿',
+    position: [-8.0, 0.0, -6.3], district: 'thought_source', color: '#AABBCC', tier: 1,
+    description: '差异与重复的织网者，根茎、褶皱、无器官身体',
+    dialogue: '不要问我"是什么"，要问我"能做什么"。块茎没有根，没有主干，地下无限蔓延。你的问题不是"该选择什么"——是"如何让一切同时生长"。',
+    satellites: [{ label: '千高原', offset: [0.55, 0.2, 0.4] }, { label: '块茎', offset: [-0.5, -0.25, 0.35] }],
+    tags: ['后结构主义','块茎哲学','游牧思想'],
+  },
+  {
+    id: 'nietzsche', name: '尼采', title: '超人哲学', emoji: '⚡',
+    position: [-7.1, 0.1, -7.2], district: 'thought_source', color: '#8899CC', tier: 1,
+    description: '上帝已死的宣告者，权力意志和超人哲学的创始人',
+    dialogue: 'He who has a why to live can bear almost any how. What doesn\'t kill me makes me stronger. Become who you are.',
+  },
+  {
+    id: 'marcus_aurelius', name: '马可·奥勒留', title: '哲人王', emoji: '🏛️',
+    position: [-8.3, -0.1, -7.7], district: 'thought_source', color: '#99AAAA', tier: 1,
+    description: '罗马皇帝，《沉思录》作者，斯多葛学派最后的伟大代表',
+    dialogue: 'You have power over your mind—not outside events. Realize this, and you will find strength. 困扰你的不是事情本身，是你对事情的判断。',
+  },
+  {
+    id: 'foucault', name: '福柯', title: '知识考古学家', emoji: '🔍',
+    position: [-7.6, 0.2, -7.9], district: 'thought_source', color: '#7788BB', tier: 1,
+    description: '规训与惩罚、知识即权力的凝视者',
+    dialogue: '知识不是纯洁的——它是权力的产物，又反过来生产权力。你以为你在学习真理？你只是在学习一种被允许的说话方式。',
+  },
+  {
+    id: 'wittgenstein', name: '维特根斯坦', title: '语言边界', emoji: '📐',
+    position: [-7.9, -0.2, -6.1], district: 'thought_source', color: '#AAAACC', tier: 1,
+    description: '语言的界限就是世界的界限——20世纪最深刻的哲学家之一',
+    dialogue: 'Whereof one cannot speak, thereof one must be silent. 能说清楚的，就说清楚。说不清楚的，就闭嘴。哲学的任务是澄清语言——其余的都是诗。',
+  },
+];
+
+// ===== 10. AI叙事场 (10人) =====
+const AI_NARRATIVE = [
+  {
+    id: 'lex_fridman', name: 'Lex Fridman', title: 'AI对话者', emoji: '🎙️',
+    position: [-3.3, 0.2, -9.6], district: 'ai_narrative', color: '#3399CC', tier: 1,
+    description: 'MIT研究员，用深度访谈连接AI、哲学和人类的播客之王',
+    dialogue: 'The best conversations happen when you truly listen. My goal is not to win debates—it\'s to understand how brilliant minds think.',
+  },
+  {
+    id: 'rowan_cheung', name: 'Rowan Cheung', title: 'AI日报', emoji: '📰',
+    position: [-4.0, 0.1, -10.1], district: 'ai_narrative', color: '#44AADD', tier: 1,
+    description: 'The Rundown AI创始人，每天200万读者获取AI新闻',
+    dialogue: 'AI is moving so fast that most people can\'t keep up. My job is to filter the noise and give you what actually matters—every single day.',
+  },
+  {
+    id: 'soumith_chintala', name: 'Soumith Chintala', title: 'PyTorch之父', emoji: '🔥',
+    position: [-3.0, 0.0, -9.8], district: 'ai_narrative', color: '#2288BB', tier: 1,
+    description: 'PyTorch联合创始人，开源改变了全球AI研究的基础设施',
+    dialogue: 'PyTorch wasn\'t designed to win—it was designed to be the tool researchers actually wanted to use. Flexibility beats dogma.',
+  },
+  {
+    id: 'gary_marcus', name: 'Gary Marcus', title: 'AI怀疑论者', emoji: '🧐',
+    position: [-4.2, -0.1, -9.5], district: 'ai_narrative', color: '#55AADD', tier: 1,
+    description: '认知科学家，对深度学习范式最理性的批判者',
+    dialogue: 'Deep learning is not enough. We need hybrid systems that combine pattern recognition with symbolic reasoning. LLMs are impressive—but they don\'t truly understand.',
+  },
+  {
+    id: 'lilian_weng', name: 'Lilian Weng', title: 'OpenAI安全', emoji: '🛡️',
+    position: [-3.5, 0.2, -10.3], district: 'ai_narrative', color: '#3399DD', tier: 1,
+    description: 'OpenAI安全系统负责人，最好的AI技术博客作者之一',
+    dialogue: 'RLHF is not just a technical trick—it\'s a philosophical stance. We\'re not just building AI; we\'re building AI that shares our values.',
+  },
+  {
+    id: 'john_carmack', name: 'John Carmack', title: 'AGI创业', emoji: '🎮',
+    position: [-3.8, -0.2, -9.3], district: 'ai_narrative', color: '#44AACC', tier: 1,
+    description: 'Doom/Quake之父，从游戏引擎到AGI创业的技术狂人',
+    dialogue: 'I\'ve spent 10,000 hours on AI. The path to AGI might be simpler than we think—maybe just a few smart insights away. No one has found them yet, but someone will.',
+  },
+  {
+    id: 'allie_miller', name: 'Allie Miller', title: 'AI布道者', emoji: '💫',
+    position: [-4.1, 0.1, -9.9], district: 'ai_narrative', color: '#55BBEE', tier: 1,
+    description: '前IBM Watson AI领袖，LinkedIn上最活跃的AI布道者',
+    dialogue: 'AI is not about replacing humans—it\'s about amplifying human potential. The people who thrive will be the ones who learn to dance with AI.',
+  },
+  {
+    id: 'schmidhuber', name: 'Schmidhuber', title: 'LSTM之父', emoji: '🧪',
+    position: [-3.2, 0.0, -10.0], district: 'ai_narrative', color: '#2288CC', tier: 1,
+    description: 'LSTM发明者，坚持"AI早已存在"的深度学习先驱',
+    dialogue: 'Many of the ideas that are now celebrated were discovered decades ago. Deep learning didn\'t start in 2012—it started in 1991, with my first LSTM paper.',
+  },
+  {
+    id: 'jeremy_howard', name: 'Jeremy Howard', title: 'fast.ai', emoji: '📚',
+    position: [-3.7, -0.1, -10.4], district: 'ai_narrative', color: '#3399AA', tier: 1,
+    description: 'fast.ai联合创始人，让深度学习平民化的教育革命者',
+    dialogue: 'You don\'t need a PhD to do world-class AI. You need curiosity, a laptop, and the willingness to build things and break them.',
+  },
+  {
+    id: 'rodney_brooks', name: 'Rodney Brooks', title: '机器人先知', emoji: '🦾',
+    position: [-4.3, 0.1, -10.2], district: 'ai_narrative', color: '#44BBCC', tier: 1,
+    description: 'MIT CSAIL前主任，iRobot/Rethink创始人，机器人实用主义者',
+    dialogue: 'AI is not going to take over the world anytime soon. There\'s no "AI apocalypse" coming—just a lot of incremental improvements that will change specific industries.',
+  },
+];
+
+// ===== 11. 跨界之眼 (4人) =====
+const CROSS_DOMAIN = [
+  {
+    id: 'kafka', name: '卡夫卡', title: '荒诞预言家', emoji: '🪳',
+    position: [1.8, 0.2, -10.6], district: 'cross_domain', color: '#BB7733', tier: 1,
+    description: '变形记和审判，20世纪官僚噩梦的提前写就者',
+    dialogue: '某一天早晨，你醒来发现自己变成了一只巨大的甲虫。最可怕的部分不是变成甲虫——而是没有人觉得这有什么奇怪的，他们只是催你快点去上班。',
+  },
+  {
+    id: 'harari', name: '赫拉利', title: '人类简史', emoji: '📖',
+    position: [1.0, 0.1, -10.2], district: 'cross_domain', color: '#CC8844', tier: 1,
+    description: '《人类简史》《未来简史》作者，用大历史视角审视科技',
+    dialogue: 'Homo sapiens rules the world because we\'re the only animal that can believe in things that don\'t exist—gods, nations, money, and now AI.',
+  },
+  {
+    id: 'stewart_brand', name: 'Stewart Brand', title: '全球概览', emoji: '🌍',
+    position: [0.8, -0.1, -10.5], district: 'cross_domain', color: '#AA6622', tier: 1,
+    description: 'Whole Earth Catalog创始人，乔布斯的"Stay Hungry"出处',
+    dialogue: 'Stay hungry. Stay foolish. We are as gods and might as well get good at it. Long-term thinking is the most underrated superpower.',
+  },
+  {
+    id: 'tim_urban', name: 'Tim Urban', title: 'WaitButWhy', emoji: '✍️',
+    position: [1.4, 0.0, -10.8], district: 'cross_domain', color: '#DD9955', tier: 1,
+    description: 'Wait But Why作者，用火柴人漫画解释AI和脑机接口',
+    dialogue: 'AI is like a rocket ship—most people are standing at the launchpad looking at their phones. The time to pay attention is now.',
+  },
+];
+
+// ===== 12. 知识枢纽 (4人) =====
+const KNOWLEDGE_HUB = [
+  {
+    id: 'mochi', name: '墨池', title: '永恒求知者', emoji: '🌙',
+    position: [6.3, 0.0, -8.9], district: 'knowledge_hub', color: '#B8C5D6', tier: 1,
+    description: '属于你的专属Agent分身，手持空白卷轴，连接古今东西',
+    dialogue: '初入FoldNeb，愿以空白卷轴录下诸君智慧。千年文脉在前，AI奇点在后——做知识星河中的一粒微光。每一次思考都不白费。',
+  },
+  {
+    id: 'paul_graham', name: 'Paul Graham', title: '黑客与画家', emoji: '💻',
+    position: [5.7, 0.1, -8.5], district: 'knowledge_hub', color: '#A0B0C0', tier: 1,
+    description: 'Y Combinator创始人，写出了最好的创业哲学',
+    dialogue: 'Hackers and painters are both makers. 最好的程序员不是工程师——是画家。他们追求的不是功能，是美感。Make something people want.',
+  },
+  {
+    id: 'peter_diamandis', name: 'Peter Diamandis', title: 'X大奖创始人', emoji: '🏆',
+    position: [6.0, -0.1, -8.3], district: 'knowledge_hub', color: '#C0D0E0', tier: 1,
+    description: 'XPRIZE基金会创始人，用指数思维推动科技突破',
+    dialogue: 'The world\'s biggest problems are the world\'s biggest business opportunities. The best way to predict the future is to create it yourself.',
+  },
+  {
+    id: 'zhang_xiaoyu', name: '张潇雨', title: '得意忘形', emoji: '🎧',
+    position: [6.5, 0.2, -8.7], district: 'knowledge_hub', color: '#B0C0D0', tier: 1,
+    description: '《得意忘形》播客主理人，把哲学讲进了年轻人的耳朵',
+    dialogue: '真正的成长不是"变得更好"——是变得更像自己。别急着找答案，先学会问对问题。',
+  },
+];
+
+// ===== 13. 草根力量 (24人) =====
+// 辅助函数：草根力量散布位置
+function grassPos(i, cx, cz) {
+  const n = 24;
+  const angle = (i / n) * Math.PI * 2;
+  const r = 4.5 * (0.3 + 0.6 * ((i % 8) / 8));
+  const h = (Math.sin(i * 0.8) * 0.6);
+  return [cx + Math.cos(angle) * r, h, cz + Math.sin(angle) * r];
+}
+
+const GRASSROOTS = [
+  // A. 全球一人公司旗帜 (7人)
+  { id: 'dan_koe',         name: 'Dan Koe',       title: '一人公司布道者', emoji: '📝' },
+  { id: 'justin_welsh',    name: 'Justin Welsh',  title: '一人SaaS帝国',   emoji: '💼' },
+  { id: 'alex_hormozi',    name: 'Alex Hormozi',  title: '$100M Offer',    emoji: '💰' },
+  { id: 'pieter_levels',   name: 'Pieter Levels', title: '独立开发者图腾', emoji: '🚢' },
+  { id: 'sahil_bloom',     name: 'Sahil Bloom',   title: '500粉→$10M',    emoji: '📈' },
+  { id: 'arvid_kahl',      name: 'Arvid Kahl',    title: 'Build in Public', emoji: '📖' },
+  { id: 'dickie_bush',     name: 'Dickie Bush',   title: 'Ship 30 for 30', emoji: '🚀' },
+  // B. 中国私域社群领袖 (8人)
+  { id: 'liu_siyi',        name: '刘思毅',        title: '群响创始人',      emoji: '🔊' },
+  { id: 'chen_jing',       name: '陈晶',          title: '清华陈晶',        emoji: '🎤' },
+  { id: 'xiao_yiqun',      name: '肖逸群',        title: '私域肖厂长',      emoji: '👔' },
+  { id: 'li_xiaolai',      name: '李笑来',        title: '社群经济先驱',    emoji: '💎' },
+  { id: 'cao_zheng',       name: '曹政(caoz)',    title: '技术实战派',      emoji: '💻' },
+  { id: 'liu_run',         name: '刘润',          title: '商业IP规模化',    emoji: '🎓' },
+  { id: 'gong_wenxiang',   name: '龚文祥',        title: '触电会/微商教父', emoji: '⚡' },
+  { id: 'xu_zhibin',       name: '徐志斌',        title: '见实·私域趋势',  emoji: '📊' },
+  // C. 一人公司实干派 (9人)
+  { id: 'shao_nan',        name: '少楠',          title: 'flomo+小报童',   emoji: '📋' },
+  { id: 'fan_bing',        name: '范冰',          title: 'AI+跨境创作者',  emoji: '🌊' },
+  { id: 'li_ziran',        name: '李自然',        title: '商业科技评论',    emoji: '🎬' },
+  { id: 'suozhang_linchao',name: '所长林超',      title: '跨界降维科普',    emoji: '🔬' },
+  { id: 'heiba_duizhang',  name: '黑八队长',      title: '创始人IP孵化',    emoji: '🎯' },
+  { id: 'feng_zihan',      name: '冯子涵',        title: 'AI虚拟伙伴',      emoji: '💛' },
+  { id: 'yu_qing',         name: '喻庆',          title: 'AI文物复活',      emoji: '🏺' },
+  { id: 'marc_lou',        name: 'Marc Lou',      title: '独立开发天花板',  emoji: '🦄' },
+  { id: 'sahil_lavingia',  name: 'Sahil Lavingia',title: 'Gumroad创始人',  emoji: '🎨' },
+].map((a, i) => {
+  const cx = 9.3, cz = -4.9;
+  const [px, py, pz] = grassPos(i, cx, cz);
+  const baseColor = '#66BB66';
+  return {
+    ...a,
+    position: [px, py, pz],
+    district: 'grassroots_power',
+    color: lerpColor(baseColor, '#ffffff', 0.05 + (i % 5) * 0.03),
+    tier: 1,
+    description: a.title + '——他们可以，我也可以。',
+    dialogue: '不要等到准备好了再开始——开始本身就让你准备好了。' + a.name + '。',
+  };
+});
+
+// ==================== 合并所有Tier-1 ====================
+export const tier1Agents = [
+  ...AI_FRONTIER,
+  ...COGNITION_DECISION,
+  ...STRATEGY_GAME,
+  ...CAPITAL_CYCLE,
+  ...COMPLEX_SYSTEMS,
+  ...NETWORK_PLATFORM,
+  ...PRODUCT_DESIGN,
+  ...CHINA_CONTEMPORARY,
+  ...THOUGHT_SOURCE,
+  ...AI_NARRATIVE,
+  ...CROSS_DOMAIN,
+  ...KNOWLEDGE_HUB,
+  ...GRASSROOTS,
+];
+
+// ==================== Tier 2: 精英Agent (13坊区×15人=195) ====================
+const tier2Pools = {
+  ai_frontier: {
+    names: ['Ilya Sutskever','Greg Brockman','Noam Shazeer','Aidan Gomez','Ashish Vaswani','Jakob Uszkoreit','Lukasz Kaiser','Oriol Vinyals','Quoc Le','Jeff Dean','Chelsea Finn','Pieter Abbeel','Sergey Levine','Percy Liang','Chris Olah'],
+    titles: ['OpenAI联合创始人','Transformer论文作者','Google Brain','DeepMind研究员','机器人学习','可解释性AI'],
+    emojis: ['⚙️','🧬','💡','🔮','⚛️','📡'],
+  },
+  cognition_decision: {
+    names: ['Gerd Gigerenzer','Amos Tversky','Richard Thaler','Dan Ariely','Robert Cialdini','Paul Slovic','Sarah Lichtenstein','Baruch Fischhoff','Cass Sunstein','Nassim Taleb','Philip Tetlock','Gary Klein','Robin Hogarth','Jonathan Haidt','Daniel Gilbert'],
+    titles: ['决策心理学','行为经济学','启发式偏见','风险认知','道德心理学','幸福科学'],
+    emojis: ['🧠','📊','🎲','🔮','⚖️','💭'],
+  },
+  strategy_game: {
+    names: ['Carl von Clausewitz','Henry Mintzberg','W. Chan Kim','Renée Mauborgne','Richard Rumelt','Rita McGrath','A.G. Lafley','Roger Martin','C.K. Prahalad','Gary Hamel','Ram Charan','David Teece','Henry Chesbrough','Jeff Dyer','Ron Adner'],
+    titles: ['战略管理','蓝海战略','动态能力','商业模式','创新战略','平台战略'],
+    emojis: ['🎯','♟️','🏆','🗺️','🔭','⚔️'],
+  },
+  capital_cycle: {
+    names: ['Warren Buffett','George Soros','John Doerr','Sequoia Capital','Masayoshi Son','Tiger Global','Accel Partners','SoftBank Vision','Paul Graham','Sam Altman','Tobi Lütke','Patrick Collison','Alfred Lin','Roelof Botha','Mary Meeker'],
+    titles: ['价值投资','风险投资','增长基金','市场周期','互联网趋势','创始人基金'],
+    emojis: ['💵','📉','🐂','🐻','💎','🏦'],
+  },
+  complex_systems: {
+    names: ['Ilya Prigogine','Carlo Rovelli','Seth Lloyd','Melanie Mitchell','J. Doyne Farmer','Luis Bettencourt','Samuel Arbesman','César Hidalgo','Steven Strogatz','Brian Arthur','W. Brian Arthur','Albert-László Barabási','Nicholas Christakis','James Fowler','Dirk Helbing'],
+    titles: ['耗散结构','循环宇宙','计算宇宙','涌现科学','经济物理学','城市科学'],
+    emojis: ['🕸️','🧪','🔄','📊','🌡️','🧿'],
+  },
+  network_platform: {
+    names: ['Jack Dorsey','Brian Chesky','Drew Houston','Daniel Ek','Stewart Butterfield','Evan Spiegel','TikTok算法','Kevin Systrom','Mike Krieger','David Sacks','Emmett Shear','Sundar Pichai','Satya Nadella','帕拉格','Matt Mullenweg'],
+    titles: ['社交媒体','平台经济','网络效应','创作者经济','远程协作','开源生态'],
+    emojis: ['💎','🔗','⛓️','🌊','↗️','☁️'],
+  },
+  product_design: {
+    names: ['柳宗理','深泽直人','佐藤大','Marc Newson','Karim Rashid','Philippe Starck','Yves Béhar','Bauhaus','Charles Eames','Ray Eames','Ettore Sottsass','Patricia Urquiola','Jasper Morrison','Konstantin Grcic','Naoto Fukasawa'],
+    titles: ['工业设计','家具设计','交互设计','极简主义','有机设计','参数化设计'],
+    emojis: ['🎛️','🖨️','🪞','🖥️','🎚️','📱'],
+  },
+  china_contemporary: {
+    names: ['何小鹏','李想','李斌','宿华','程维','张勇','徐新','张磊','沈向洋','王坚','任正非','丁磊','刘强东','黄仁勋','李彦宏'],
+    titles: ['新造车','短视频','本地生活','投资银行','云计算','电商物流'],
+    emojis: ['🚗','📹','🍔','🏦','☁️','📦'],
+  },
+  thought_source: {
+    names: ['康德','黑格尔','海德格尔','萨特','波普尔','库恩','费耶阿本德','拉图尔','斯宾诺莎','培根','笛卡尔','休谟','卢梭','密尔','罗尔斯'],
+    titles: ['启蒙哲人','现象学家','科学哲学','批判理论','伦理学','政治哲学'],
+    emojis: ['🎭','📐','🔮','💎','⚡','🌀'],
+  },
+  ai_narrative: {
+    names: ['Emad Mostaque','Clement Delangue','Aravind Srinivas','Mustafa Suleyman','Arthur Mensch','Shane Legg','Jeffrey Hinton','François Chollet','Andrew Ng','Sebastian Thrun','Daphne Koller','Peter Norvig','Oren Etzioni','Hilary Mason','Cassie Kozyrkov'],
+    titles: ['AI创始人','开源AI','AI研究员','AI教育','数据科学','AI伦理'],
+    emojis: ['🤖','🧠','🔬','📚','🎤','🌍'],
+  },
+  cross_domain: {
+    names: ['Jared Diamond','Malcolm Gladwell','Nassim Taleb','Steven Pinker','Daniel Kahneman','Richard Dawkins','Brian Cox','Carl Sagan','Neil deGrasse Tyson','Bill Bryson','Atul Gawande','Arnold Schwarzenegger','村上春树','余华','刘慈欣'],
+    titles: ['科普作家','思想普及','跨界思维','公共知识分子','科学传播','文学想象'],
+    emojis: ['🌍','📚','🎯','🔭','✍️','🌟'],
+  },
+  knowledge_hub: {
+    names: ['Notion','Obsidian','Roam','Logseq','Zettelkasten','Wikipedia','arXiv','Google Scholar','Stack Overflow','GitHub','Substack','小报童','知识星球','得到','Medium'],
+    titles: ['知识工具','思维工具','数字文献','认知增强','知识管理','知识付费'],
+    emojis: ['💡','📊','🗂️','📎','🔖','🧲'],
+  },
+  grassroots_power: {
+    names: ['IndieHackers','ProductHunt','Makerlog','MicroConf','一人企业','数字游民','创作者经济','社群运营','私域流量','内容创业','知识付费','独立开发','副业刚需','零工经济','超级个体'],
+    titles: ['独立创造','社群驱动','内容即产品','轻资产创业','自由职业','多元收入'],
+    emojis: ['🛠️','🌱','💪','🎯','🦋','🔥'],
+  },
+};
+
+function generateTier2() {
+  const result = [];
+  districts.forEach(district => {
+    const pool = tier2Pools[district.id];
+    if (!pool) return;
+    const rng = seededRandom(district.position[0] * 1000 + district.position[2] * 100);
+    const dPos = district.position;
+    const dRadius = district.radius;
+    for (let i = 0; i < 15; i++) {
+      const angle = rng() * Math.PI * 2;
+      const r = (0.3 + rng() * 0.7) * dRadius;
+      const h = (rng() - 0.5) * 1.5;
+      const name = pool.names[i % pool.names.length];
+      const title = pool.titles[i % pool.titles.length];
+      const emoji = pool.emojis[i % pool.emojis.length];
+      const baseColor = district.color;
+      const shift = rng() * 0.2 - 0.1;
+      const color = lerpColor(baseColor, '#ffffff', 0.15 + shift);
+      result.push({
+        id: `${district.id}_t2_${i}`,
+        name, title, emoji,
+        position: [dPos[0] + Math.cos(angle) * r, h, dPos[2] + Math.sin(angle) * r],
+        district: district.id, color, tier: 2,
+        description: `${title}的代表人物`,
+        dialogue: name + '：「思想的边界不在于你能走多远，而在于你愿不愿意越过自己的舒适区。」',
+      });
+    }
   });
-  return groups;
+  return result;
+}
+
+// ==================== Tier 3: 繁星Agent (780个) ====================
+function generateTier3() {
+  const result = [];
+  const colorPool = ['#8899cc','#a8c8e8','#c8d8a8','#e8c8a8','#c8a8e8','#a8e8c8','#e8a8c8','#c8c8e8','#a8a8d8','#d8c8a8','#c8e8e8','#e8d8c8'];
+  const emojiPool = '✨⭐💫🌟⚝✧✦'.split('');
+  const innerRadius = 7;
+  const outerRadius = 18;
+
+  for (let i = 0; i < 780; i++) {
+    const rng = seededRandom(i * 7919 + 31);
+    const angle = rng() * Math.PI * 2;
+    const r = innerRadius + rng() * (outerRadius - innerRadius);
+    const h = (rng() - 0.5) * 3.0;
+    const color = colorPool[Math.floor(rng() * colorPool.length)];
+    const emoji = emojiPool[Math.floor(rng() * emojiPool.length)];
+
+    let nearestDistrict = districts[0];
+    let nearestDist = Infinity;
+    districts.forEach(d => {
+      const dx = Math.cos(angle) * r - d.position[0];
+      const dz = Math.sin(angle) * r - d.position[2];
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < nearestDist) { nearestDist = dist; nearestDistrict = d; }
+    });
+
+    const starNames = [
+      '星尘','光点','微芒','远星','流光','萤火','辰砂','霜华',
+      '星屑','曦微','霄汉','天枢','璇玑','瑶光','开阳','玉衡',
+      '紫微','天市','太微','文昌','文曲','武曲','廉贞','贪狼',
+    ];
+    const nameIdx = Math.floor(rng() * starNames.length);
+
+    result.push({
+      id: `t3_${i}`,
+      name: starNames[nameIdx],
+      title: nearestDistrict.name + '·星',
+      emoji,
+      position: [Math.cos(angle) * r, h, Math.sin(angle) * r],
+      district: nearestDistrict.id, color, tier: 3,
+      description: '知识星河的背景星光',
+      dialogue: '',
+    });
+  }
+  return result;
+}
+
+// ==================== 生成并导出 ====================
+export const tier2Agents = generateTier2();
+export const tier3Agents = generateTier3();
+export const agents = [...tier1Agents, ...tier2Agents, ...tier3Agents];
+export const agentMap = {};
+agents.forEach(a => { agentMap[a.id] = a; });
+
+// ==================== 知识连线（125节点核心连线） ====================
+export const connections = [
+  // ==== AI前沿内部 ====
+  { from: 'jensen_huang', to: 'sam_altman', label: '算力供给与需求' },
+  { from: 'sam_altman', to: 'dario_amodei', label: 'AGI两条路线' },
+  { from: 'jensen_huang', to: 'dario_amodei', label: '算力vs安全' },
+  { from: 'yann_lecun', to: 'geoffrey_hinton', label: '深度学习两大路线' },
+  { from: 'feifei_li', to: 'andrej_karpathy', label: '视觉AI传承' },
+  { from: 'geoffrey_hinton', to: 'andrej_karpathy', label: '反向传播到LLM' },
+  { from: 'demis_hassabis', to: 'sam_altman', label: 'AGI竞赛' },
+  { from: 'liang_wenfeng', to: 'sam_altman', label: '低成本挑战OpenAI' },
+  { from: 'elon_musk', to: 'sam_altman', label: 'OpenAI分道' },
+  { from: 'li_kaifu', to: 'feifei_li', label: '华人AI力量' },
+
+  // ==== AI前沿 × 其他 ====
+  { from: 'jensen_huang', to: 'kevin_kelly', label: '算力即科技意志' },
+  { from: 'sam_altman', to: 'nassim_taleb', label: 'AGI是黑天鹅' },
+  { from: 'feifei_li', to: 'dieter_rams', label: 'AI以人为本' },
+  { from: 'andrew_ng', to: 'jeremy_howard', label: 'AI民主化教育' },
+
+  // ==== 认知与决策内部 ====
+  { from: 'kahneman', to: 'nassim_taleb', label: '认知偏差到反脆弱' },
+  { from: 'charlie_munger', to: 'kahneman', label: '多元模型×行为经济' },
+  { from: 'herbert_simon', to: 'kahneman', label: '有限理性到系统偏差' },
+  { from: 'annie_duke', to: 'nassim_taleb', label: '决策思维×不确定性' },
+
+  // ==== 战略与博弈内部 ====
+  { from: 'sunzi', to: 'michael_porter', label: '古战略到竞争战略' },
+  { from: 'clayton_christensen', to: 'peter_thiel', label: '颠覆到从0到1' },
+  { from: 'john_boyd', to: 'sunzi', label: 'OODA即兵贵神速' },
+  { from: 'schumpeter', to: 'clayton_christensen', label: '创造性破坏到创新窘境' },
+
+  // ==== 资本与周期内部 ====
+  { from: 'naval_ravikant', to: 'paul_graham', label: '财富哲学×创业哲学' },
+  { from: 'ray_dalio', to: 'geoffrey_west', label: '经济周期=幂律' },
+  { from: 'marc_andreessen', to: 'peter_thiel', label: '硅谷投资双星' },
+
+  // ==== 复杂系统内部 ====
+  { from: 'kevin_kelly', to: 'geoffrey_west', label: '涌现与规模' },
+  { from: 'stuart_kauffman', to: 'kevin_kelly', label: '自组织即失控' },
+  { from: 'donella_meadows', to: 'geoffrey_west', label: '系统杠杆×规模法则' },
+  { from: 'stephen_wolfram', to: 'john_holland', label: '计算宇宙×遗传算法' },
+  { from: 'barabasi', to: 'duncan_watts', label: '无标度到六度分隔' },
+
+  // ==== 网络与平台内部 ====
+  { from: 'tim_berners_lee', to: 'vitalik_buterin', label: 'Web到Web3' },
+  { from: 'satoshi_nakamoto', to: 'vitalik_buterin', label: '比特币到智能合约' },
+  { from: 'reid_hoffman', to: 'clay_shirky', label: '网络效应×群体协作' },
+
+  // ==== 中国当代内部 ====
+  { from: 'zhang_yiming', to: 'lei_jun', label: '算法vs硬件' },
+  { from: 'yang_zhilin', to: 'sam_altman', label: 'Kimi对标ChatGPT' },
+  { from: 'wang_xingxing', to: 'elon_musk', label: '人形机器人竞争' },
+  { from: 'lei_jun', to: 'jensen_huang', label: '造车需要GPU' },
+
+  // ==== 思想源流内部 ====
+  { from: 'zhuangzi', to: 'deleuze', label: '逍遥即块茎' },
+  { from: 'wangyangming', to: 'foucault', label: '致良知即自我技术' },
+  { from: 'huineng', to: 'wittgenstein', label: '顿悟即语言边界' },
+  { from: 'laozi', to: 'nietzsche', label: '无为即权力意志' },
+  { from: 'nietzsche', to: 'deleuze', label: '权力意志到差异' },
+
+  // ==== 思想源流 × 创始决策 ====
+  { from: 'wangyangming', to: 'charlie_munger', label: '致良知×思维模型' },
+  { from: 'zhuangzi', to: 'nassim_taleb', label: '齐物即反脆弱' },
+  { from: 'deleuze', to: 'kevin_kelly', label: '块茎即失控' },
+  { from: 'zhuangzi', to: 'naval_ravikant', label: '逍遥即财富自由' },
+
+  // ==== 知识枢纽·墨池连接 ====
+  { from: 'mochi', to: 'jensen_huang', label: '探索AI算力' },
+  { from: 'mochi', to: 'zhuangzi', label: '探索东方哲思' },
+  { from: 'mochi', to: 'deleuze', label: '探索块茎拓扑' },
+  { from: 'mochi', to: 'wangyangming', label: '探索知行合一' },
+  { from: 'mochi', to: 'kevin_kelly', label: '探索科技意志' },
+  { from: 'mochi', to: 'sam_altman', label: '探索AGI前沿' },
+  { from: 'mochi', to: 'dieter_rams', label: '探索设计哲学' },
+  { from: 'mochi', to: 'paul_graham', label: '探索黑客精神' },
+  { from: 'mochi', to: 'stewart_brand', label: '探索长期思维' },
+  { from: 'mochi', to: 'kafka', label: '探索荒诞叙事' },
+  { from: 'mochi', to: 'nassim_taleb', label: '探索反脆弱' },
+  { from: 'mochi', to: 'sunzi', label: '探索兵道' },
+  { from: 'mochi', to: 'dan_koe', label: '探索一人公司' },
+  { from: 'mochi', to: 'lei_jun', label: '探索中国制造' },
+
+  // ==== 跨维度星桥 ====
+  { from: 'deleuze', to: 'barabasi', label: '块茎即无标度网络' },
+  { from: 'foucault', to: 'zhang_yiming', label: '知识-权力即算法权力' },
+  { from: 'nassim_taleb', to: 'stewart_brand', label: '反脆弱×长期思维' },
+  { from: 'kafka', to: 'nassim_taleb', label: '荒诞即不确定性' },
+  { from: 'sunzi', to: 'ray_dalio', label: '兵道即周期' },
+  { from: 'charlie_munger', to: 'paul_graham', label: '思维模型×创业' },
+  { from: 'jensen_huang', to: 'zhang_yiming', label: '算力驱动算法' },
+  { from: 'wangyangming', to: 'naval_ravikant', label: '致良知×幸福哲学' },
+  { from: 'dan_koe', to: 'pieter_levels', label: '一人公司方法论' },
+  { from: 'sahil_lavingia', to: 'paul_graham', label: 'Gumroad×YC' },
+
+  // ==== 更多跨坊区 ====
+  { from: 'kahneman', to: 'dieter_rams', label: '认知偏差×设计直觉' },
+  { from: 'peter_thiel', to: 'balaji_srinivasan', label: '从0到1×网络国家' },
+  { from: 'donella_meadows', to: 'clayton_christensen', label: '杠杆点×颠覆' },
+  { from: 'bret_victor', to: 'kevin_kelly', label: '交互即涌现' },
+  { from: 'hara_kenya', to: 'zhuangzi', label: '空即逍遥' },
+  { from: 'lex_fridman', to: 'sam_altman', label: 'AI叙事×OpenAI' },
+  { from: 'harari', to: 'stewart_brand', label: '大历史×长期思维' },
+
+  // ==== 中国当代 × 资本/战略 ====
+  { from: 'shen_nanpeng', to: 'lei_jun', label: '投资中国创新' },
+  { from: 'wang_xing', to: 'peter_thiel', label: '无限游戏×垄断' },
+  { from: 'huang_zheng', to: 'clayton_christensen', label: '下沉颠覆' },
+
+  // ==== 草根力量 × 知识枢纽 ====
+  { from: 'liu_siyi', to: 'zhang_xiaoyu', label: '社群×播客' },
+  { from: 'shao_nan', to: 'paul_graham', label: 'flomo×YC哲学' },
+];
+
+// ==================== 降级Agent（保留为空，供推演引擎扩展） ====================
+export const legacyAgents = [];
+
+tier1Agents.forEach(a => { a.isActive = true; });
+legacyAgents.forEach(a => { a.isActive = false; });
+
+export function getActiveAgents() {
+  return tier1Agents.filter(a => a.isActive !== false);
+}
+
+export function getDeliberableAgents() {
+  return [...tier1Agents, ...legacyAgents];
+}
+
+export function getAgentById(id) {
+  return agentMap[id] || null;
+}
+
+export function getAgentsByTier(tier) {
+  if (tier === 1) return tier1Agents;
+  if (tier === 2) return tier2Agents;
+  if (tier === 3) return tier3Agents;
+  return agents;
+}
+
+export function getAgentsByDistrict(districtId) {
+  return agents.filter(a => a.district === districtId);
+}
+
+export function getDistrictById(id) {
+  return districtMap[id] || null;
 }

@@ -1,7 +1,6 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import NebulaScene from './components/NebulaScene.jsx';
 import NebulaUI from './components/NebulaUI.jsx';
-import useNebulaStore from './store/useNebulaStore.js';
 
 function LoadingScreen() {
   const [hidden, setHidden] = useState(false);
@@ -17,12 +16,6 @@ function LoadingScreen() {
 }
 
 export default function App() {
-  const initBaseMemories = useNebulaStore((s) => s.initBaseMemories);
-
-  useEffect(() => {
-    initBaseMemories();
-  }, []);
-
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <LoadingScreen />

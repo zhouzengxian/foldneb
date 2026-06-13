@@ -123,10 +123,10 @@ export function processDialogue(fromId, toId, topic = '') {
  */
 export async function simulateConversationRound() {
   const store = useNebulaStore.getState();
-  const { AGENTS } = await import('../data/gameData.js');
+  const { tier1Agents: allTier1 } = await import('../data/gameData.js');
 
   const results = [];
-  const shuffled = [...AGENTS].sort(() => Math.random() - 0.5);
+  const shuffled = [...allTier1].sort(() => Math.random() - 0.5);
 
   // 随机配对对话（10对）
   for (let i = 0; i < shuffled.length - 1; i += 2) {
