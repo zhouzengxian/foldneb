@@ -44,7 +44,7 @@ html, body, #root {
   align-items: center;
   justify-content: center;
   background: radial-gradient(ellipse at center, #050520 0%, #000010 100%);
-  transition: opacity 0.8s ease-out;
+  transition: opacity 0.3s ease-out;
 }
 
 .nebula-loading.hidden {

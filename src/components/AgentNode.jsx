@@ -69,7 +69,6 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
   const starMeshRef = useRef();
   const glowMeshRef = useRef();
   const ringRef = useRef();
-  const selectedGlowRef = useRef();
   const selectedRingRef = useRef();
 
   const starTexture = useMemo(() => createStarTexture(agent.color), [agent.color]);
@@ -85,7 +84,6 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
   const targetRingScale = useRef(1);
   const targetRingOpacity = useRef(0.3);
   const targetGlowOpacity = useRef(0.2);
-  const targetSelectedGlow = useRef(0);
 
   useFrame((state) => {
     if (!groupRef.current) return;
@@ -115,9 +113,6 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
     if (glowMeshRef.current) {
       glowMeshRef.current.material.opacity += (targetGlowOpacity.current - glowMeshRef.current.material.opacity) * lerp;
     }
-    if (selectedGlowRef.current) {
-      selectedGlowRef.current.material.opacity += (targetSelectedGlow.current - selectedGlowRef.current.material.opacity) * lerp;
-    }
     if (selectedRingRef.current) {
       selectedRingRef.current.rotation.z += 0.008;
       selectedRingRef.current.material.opacity = 0.15 + Math.sin(t * 2) * 0.08;
@@ -127,7 +122,6 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
     // DemoS 高亮脉冲
     if (isDemoHighlight) {
       if (glowMeshRef.current) glowMeshRef.current.material.opacity = 0.5;
-      if (selectedGlowRef.current) selectedGlowRef.current.material.opacity = 0.4;
     }
   });
 
@@ -168,8 +162,13 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
     }
   };
 
-  // Hover effect updates
-  if (isHovered) {
+  // 选中 > hover > 默认 三级效果
+  if (isSelected) {
+    targetScale.current = 1.35;
+    targetRingScale.current = 1.8;
+    targetRingOpacity.current = 0.9;
+    targetGlowOpacity.current = 0.65;
+  } else if (isHovered) {
     targetScale.current = 1.3;
     targetRingScale.current = 1.5;
     targetRingOpacity.current = 0.7;
@@ -181,31 +180,8 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
     targetGlowOpacity.current = 0.2;
   }
 
-  if (isSelected) {
-    targetSelectedGlow.current = 0.35;
-  } else {
-    targetSelectedGlow.current = 0;
-  }
-
   return (
     <group ref={groupRef}>
-      {/* 选中金色光晕 */}
-      {isSelected && (
-        <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
-          <mesh ref={selectedGlowRef}>
-            <planeGeometry args={[2.5, 2.5]} />
-            <meshBasicMaterial
-              color="#FFD700"
-              blending={THREE.AdditiveBlending}
-              depthWrite={false}
-              transparent
-              opacity={0}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-        </Billboard>
-      )}
-
       {/* 选中金色外环 */}
       {isSelected && (
         <mesh ref={selectedRingRef} rotation={[Math.PI / 2, 0, 0]}>

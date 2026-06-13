@@ -45,6 +45,14 @@ export function useForceGraph(agents, connections, districts, options = {}) {
         tier: a.tier || 3,
       };
     });
+    // 用户分身节点 — 固定在原点
+    physicsRef.current['user'] = {
+      x: 0, y: 0.3, z: 0,
+      vx: 0, vy: 0, vz: 0,
+      pinned: true,
+      displayX: 0, displayY: 0.3, displayZ: 0,
+      tier: 0,
+    };
   }
 
   useFrame((_, delta) => {

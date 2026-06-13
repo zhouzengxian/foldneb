@@ -56,6 +56,7 @@ export default function DeliberationUI() {
   const [showHistory, setShowHistory] = useState(false);
   const [showCorsConfig, setShowCorsConfig] = useState(false);
   const [corsProxyInput, setCorsProxyInput] = useState(() => getCorsProxyUrl());
+  const [wasCancelled, setWasCancelled] = useState(false);
   const abortRef = useRef(false);
   const demoRunningRef = useRef(false);
   const modeRef = useRef('api');
@@ -65,26 +66,25 @@ export default function DeliberationUI() {
   const [typedTexts, setTypedTexts] = useState({});
   const typeTimers = useRef({});
 
-  // 逐字打字，返回 Promise（完成后 resolve）
-  const typeText = useCallback(async (key, fullText, speed = 30) => {
+  // 批量打字机：chunk 方式，每 30ms 输出一批字符，总时长约 targetMs
+  const typeText = useCallback(async (key, fullText, targetMs = 800) => {
     if (!fullText) return;
-    // 清除该 key 之前的定时器
-    if (typeTimers.current[key]) {
-      clearInterval(typeTimers.current[key]);
-    }
-    // 先显示空，再逐字显示
-    setTypedTexts(prev => ({ ...prev, [key]: '' }));
+    if (typeTimers.current[key]) clearInterval(typeTimers.current[key]);
+    const TICK = 30; // 30ms 一个 tick
+    const totalTicks = Math.max(1, Math.ceil(targetMs / TICK));
+    const chunkSize = Math.max(1, Math.ceil(fullText.length / totalTicks));
     let pos = 0;
+    setTypedTexts(prev => ({ ...prev, [key]: '' }));
     await new Promise(resolve => {
       typeTimers.current[key] = setInterval(() => {
-        pos++;
+        pos = Math.min(pos + chunkSize, fullText.length);
         setTypedTexts(prev => ({ ...prev, [key]: fullText.slice(0, pos) }));
         if (pos >= fullText.length) {
           clearInterval(typeTimers.current[key]);
           delete typeTimers.current[key];
           resolve();
         }
-      }, speed);
+      }, TICK);
     });
   }, []);
 
@@ -224,10 +224,11 @@ export default function DeliberationUI() {
         if (abortRef.current) return;
         if (resp && resp.text) {
           const key = `${ri}-${resp.agentId}`;
+          // ★ 先置空，再添加对话 → 卡片出现时是空白的
+          setTypedTexts(prev => ({ ...prev, [key]: '' }));
           dialogues.push(resp);
           addDeliberationDialogue(ri, resp);
-          // 逐字打字效果
-          await typeText(key, resp.text, 25);
+          await typeText(key, resp.text, 1500);
           addLog(`  ${resp.agentName || resp.agentId}: ${resp.text.slice(0, 60)}…`);
           // 记忆提取
           const relationLabel = round.theme.slice(0, 6);
@@ -298,8 +299,18 @@ export default function DeliberationUI() {
   const cancelDeliberation = useCallback(() => {
     abortRef.current = true;
     demoRunningRef.current = false;
+    archiveDeliberation();
+    setWasCancelled(true);
     setDeliberationPhase('idle');
-  }, []);
+  }, [archiveDeliberation]);
+
+  // 开启新推演：先存档，再重置
+  const handleNewDeliberation = useCallback(() => {
+    archiveDeliberation();
+    setWasCancelled(false);
+    closeDeliberation();
+    setTimeout(() => openDeliberation(), 80);
+  }, [archiveDeliberation, closeDeliberation, openDeliberation]);
 
   // ========== Demo 播放 ==========
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -317,21 +328,23 @@ export default function DeliberationUI() {
     // Phase 1: 分析
     setDeliberationPhase('analyzing');
     addLog('🔍 墨池正在分析你的问题…');
-    await sleep(600);
+    await sleep(200);
     if (abortRef.current) return;
     initDeliberation(demoProblem, demo.analysis);
     addLog(`定位到「${demo.analysis.domain}」领域`);
     addLog(`召集 ${demo.analysis.agents.length} 位思想者：${demo.analysis.agents.map(a => getAgentInfo(a.id)?.name || a.id).join('、')}`);
-    await sleep(400);
+    await sleep(150);
     if (abortRef.current) return;
 
-    // Phase 2: 规划
+    // Phase 2: 规划（只传结构，不带对话内容）
     setDeliberationPhase('planning');
-    await sleep(300);
+    await sleep(100);
     if (abortRef.current) return;
-    addDeliberationRounds(demo.rounds);
+    addDeliberationRounds(demo.rounds.map(r => ({
+      theme: r.theme, goal: r.goal, agentIds: r.agentIds,
+    })));
     addLog(`规划 ${demo.rounds.length} 轮推演：${demo.rounds.map(r => r.theme).join(' → ')}`);
-    await sleep(300);
+    await sleep(100);
     if (abortRef.current) return;
 
     // Phase 3: 逐轮推演
@@ -346,9 +359,10 @@ export default function DeliberationUI() {
       for (const d of round.dialogues) {
         if (abortRef.current) return;
         const key = `${ri}-${d.agentId}`;
+        // Demo：打字机 ~800ms 打完一句
+        setTypedTexts(prev => ({ ...prev, [key]: '' }));
         addDeliberationDialogue(ri, d);
-        // 逐字打字效果（Demo 稍快一些）
-        await typeText(key, d.text, 35);
+        await typeText(key, d.text, 800);
         addLog(`  ${d.agentName || d.agentId}: ${d.text.slice(0, 60)}…`);
       }
 
@@ -361,13 +375,13 @@ export default function DeliberationUI() {
         });
       }
       completeDeliberationRound(ri);
-      await sleep(500);
+      await sleep(150);
     }
 
     // Phase 4: 报告
     setDeliberationPhase('reporting');
     addLog('\n📊 墨池正在整合推演结果…');
-    await sleep(600);
+    await sleep(300);
     if (abortRef.current) return;
     setDeliberationReport(demo.report);
     addLog('✨ 推演完成！');
@@ -523,6 +537,14 @@ export default function DeliberationUI() {
             )}
             {deliberationPhase === 'complete' && (
               <>
+                <button onClick={handleNewDeliberation} style={{
+                  background: 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,180,0,0.18))',
+                  border: '1px solid rgba(255,215,0,0.45)',
+                  borderRadius: '6px', padding: '4px 12px', cursor: 'pointer',
+                  color: '#FFD700', fontSize: '12px', fontFamily: 'system-ui', fontWeight: 600,
+                }}>
+                  🔄 新推演
+                </button>
                 <button onClick={handleExportReport} disabled={exporting} style={btnStyle('#FFD700')}>
                   {exporting ? '⏳' : '📷'} 导出图片
                 </button>
@@ -687,108 +709,141 @@ export default function DeliberationUI() {
                     )}
                   </div>
                 )}
-                <p style={{ color: '#ccd', fontSize: '13px', fontFamily: 'system-ui', margin: '0 0 16px' }}>
-                  告诉我你正在面临什么决策困境。墨池会召集星云中的思想者，帮你从多个维度推演。
-                </p>
-                <textarea
-                  value={problem}
-                  onChange={e => setProblem(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) startDeliberation(); }}
-                  placeholder="例如：产品已有1000个付费用户但增长停滞，该深挖存量还是拓新市场？"
-                  style={{
-                    width: '100%', minHeight: 100, resize: 'vertical',
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,215,0,0.15)',
-                    borderRadius: '10px', padding: '14px',
-                    color: '#e0e0f0', fontSize: '14px', fontFamily: 'system-ui',
-                    outline: 'none', lineHeight: 1.6,
-                  }}
-                />
-                {error && (
+                {wasCancelled ? (
                   <div style={{
-                    color: '#f66', fontSize: '13px', margin: '10px 0', padding: '10px 14px',
-                    background: 'rgba(255,50,50,0.08)', border: '1px solid rgba(255,80,80,0.25)',
-                    borderRadius: '8px', fontFamily: 'system-ui', lineHeight: 1.5,
-                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                    padding: '24px 16px', textAlign: 'center',
+                    background: 'rgba(255,100,100,0.04)', border: '1px solid rgba(255,100,100,0.15)',
+                    borderRadius: '12px', marginBottom: 16,
                   }}>
-                    <span style={{ flexShrink: 0 }}>⚠️</span>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 2 }}>API 调用失败</div>
-                      <div style={{ fontSize: '12px', color: '#e88' }}>{error}</div>
-                      <div style={{ fontSize: '11px', color: '#a88', marginTop: 6 }}>
-                        💡 建议：① 切换到「🎬 Demo」模式查看演示 &nbsp; ② 检查 API Key 是否正确 &nbsp; ③ 切换其他模型试试
+                    <div style={{ color: '#e88', fontSize: '14px', fontFamily: 'system-ui', marginBottom: 6 }}>
+                      ✕ 推演已取消，已自动存档
+                    </div>
+                    <button
+                      onClick={() => {
+                        setWasCancelled(false);
+                        setProblem('');
+                        setError(null);
+                        setLogs([]);
+                        clearTyping();
+                      }}
+                      style={{
+                        marginTop: 10, padding: '10px 36px',
+                        background: 'linear-gradient(135deg, rgba(255,215,0,0.22), rgba(255,180,0,0.15))',
+                        border: '1px solid rgba(255,215,0,0.4)',
+                        borderRadius: '10px', cursor: 'pointer',
+                        color: '#FFD700', fontSize: '14px', fontFamily: 'system-ui',
+                        fontWeight: 600,
+                      }}
+                    >
+                      🔄 开启新推演
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ color: '#ccd', fontSize: '13px', fontFamily: 'system-ui', margin: '0 0 16px' }}>
+                      告诉我你正在面临什么决策困境。墨池会召集星云中的思想者，帮你从多个维度推演。
+                    </p>
+                    <textarea
+                      value={problem}
+                      onChange={e => setProblem(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) startDeliberation(); }}
+                      placeholder="例如：产品已有1000个付费用户但增长停滞，该深挖存量还是拓新市场？"
+                      style={{
+                        width: '100%', minHeight: 100, resize: 'vertical',
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,215,0,0.15)',
+                        borderRadius: '10px', padding: '14px',
+                        color: '#e0e0f0', fontSize: '14px', fontFamily: 'system-ui',
+                        outline: 'none', lineHeight: 1.6,
+                      }}
+                    />
+                    {error && (
+                      <div style={{
+                        color: '#f66', fontSize: '13px', margin: '10px 0', padding: '10px 14px',
+                        background: 'rgba(255,50,50,0.08)', border: '1px solid rgba(255,80,80,0.25)',
+                        borderRadius: '8px', fontFamily: 'system-ui', lineHeight: 1.5,
+                        display: 'flex', alignItems: 'flex-start', gap: 8,
+                      }}>
+                        <span style={{ flexShrink: 0 }}>⚠️</span>
+                        <div>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>API 调用失败</div>
+                          <div style={{ fontSize: '12px', color: '#e88' }}>{error}</div>
+                          <div style={{ fontSize: '11px', color: '#a88', marginTop: 6 }}>
+                            💡 建议：① 切换到「🎬 Demo」模式查看演示 &nbsp; ② 检查 API Key 是否正确 &nbsp; ③ 切换其他模型试试
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 预设典型问题 */}
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ color: '#667', fontSize: '11px', fontFamily: 'system-ui', marginBottom: 8 }}>
+                        💡 一人公司典型场景（点击快速填入）：
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {PRESET_PROBLEMS.map((p, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setProblem(p.text);
+                              setError(null);
+                            }}
+                            title={p.text}
+                            style={{
+                              background: problem === p.text
+                                ? 'rgba(255,215,0,0.18)'
+                                : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${problem === p.text ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                              borderRadius: '8px', padding: '6px 12px', cursor: 'pointer',
+                              color: problem === p.text ? '#FFD700' : '#aab',
+                              fontSize: '12px', fontFamily: 'system-ui',
+                              transition: 'all 0.2s', maxWidth: '100%', overflow: 'hidden',
+                              textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (problem !== p.text) {
+                                e.currentTarget.style.borderColor = 'rgba(255,215,0,0.3)';
+                                e.currentTarget.style.background = 'rgba(255,215,0,0.08)';
+                                e.currentTarget.style.color = '#ddc';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (problem !== p.text) {
+                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                                e.currentTarget.style.color = '#aab';
+                              }
+                            }}
+                            onDoubleClick={() => setProblem('')}
+                          >
+                            <span style={{ marginRight: 4 }}>{p.icon}</span>
+                            {p.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
 
-                {/* 预设典型问题 */}
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ color: '#667', fontSize: '11px', fontFamily: 'system-ui', marginBottom: 8 }}>
-                    💡 一人公司典型场景（点击快速填入）：
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {PRESET_PROBLEMS.map((p, i) => (
+                    <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
                       <button
-                        key={i}
-                        onClick={() => {
-                          setProblem(p.text);
-                          setError(null);
-                        }}
-                        title={p.text}
+                        onClick={startDeliberation}
+                        disabled={!problem.trim()}
                         style={{
-                          background: problem === p.text
-                            ? 'rgba(255,215,0,0.18)'
+                          padding: '10px 28px',
+                          background: problem.trim()
+                            ? (mode === 'demo' ? 'linear-gradient(135deg, rgba(72,196,128,0.25), rgba(72,180,128,0.2))' : 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,180,0,0.2))')
                             : 'rgba(255,255,255,0.04)',
-                          border: `1px solid ${problem === p.text ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                          borderRadius: '8px', padding: '6px 12px', cursor: 'pointer',
-                          color: problem === p.text ? '#FFD700' : '#aab',
-                          fontSize: '12px', fontFamily: 'system-ui',
-                          transition: 'all 0.2s', maxWidth: '100%', overflow: 'hidden',
-                          textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          border: `1px solid ${problem.trim() ? (mode === 'demo' ? 'rgba(72,196,128,0.4)' : 'rgba(255,215,0,0.4)') : 'rgba(255,255,255,0.08)'}`,
+                          borderRadius: '10px', cursor: problem.trim() ? 'pointer' : 'default',
+                          color: problem.trim() ? (mode === 'demo' ? '#8e8' : '#FFD700') : '#555',
+                          fontWeight: 600, fontSize: '14px', fontFamily: 'system-ui',
                         }}
-                        onMouseEnter={(e) => {
-                          if (problem !== p.text) {
-                            e.currentTarget.style.borderColor = 'rgba(255,215,0,0.3)';
-                            e.currentTarget.style.background = 'rgba(255,215,0,0.08)';
-                            e.currentTarget.style.color = '#ddc';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (problem !== p.text) {
-                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-                            e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                            e.currentTarget.style.color = '#aab';
-                          }
-                        }}
-                        onDoubleClick={() => setProblem('')}
                       >
-                        <span style={{ marginRight: 4 }}>{p.icon}</span>
-                        {p.label}
+                        {mode === 'demo' ? '🎬 播放演示' : '⚡ 开始推演'}
                       </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button
-                    onClick={startDeliberation}
-                    disabled={!problem.trim()}
-                    style={{
-                      padding: '10px 28px',
-                      background: problem.trim()
-                        ? (mode === 'demo' ? 'linear-gradient(135deg, rgba(72,196,128,0.25), rgba(72,180,128,0.2))' : 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,180,0,0.2))')
-                        : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${problem.trim() ? (mode === 'demo' ? 'rgba(72,196,128,0.4)' : 'rgba(255,215,0,0.4)') : 'rgba(255,255,255,0.08)'}`,
-                      borderRadius: '10px', cursor: problem.trim() ? 'pointer' : 'default',
-                      color: problem.trim() ? (mode === 'demo' ? '#8e8' : '#FFD700') : '#555',
-                      fontWeight: 600, fontSize: '14px', fontFamily: 'system-ui',
-                    }}
-                  >
-                    {mode === 'demo' ? '🎬 播放演示' : '⚡ 开始推演'}
-                  </button>
-                  <span style={{ color: '#555', fontSize: '11px', fontFamily: 'system-ui' }}>Ctrl+Enter 快捷发送</span>
-                </div>
+                      <span style={{ color: '#555', fontSize: '11px', fontFamily: 'system-ui' }}>Ctrl+Enter 快捷发送</span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -942,6 +997,34 @@ export default function DeliberationUI() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 开启新推演 */}
+            {deliberationPhase === 'complete' && (
+              <div style={{ marginTop: 12, textAlign: 'center' }}>
+                <button
+                  onClick={handleNewDeliberation}
+                  style={{
+                    padding: '10px 36px',
+                    background: 'linear-gradient(135deg, rgba(255,215,0,0.22), rgba(255,180,0,0.15))',
+                    border: '1px solid rgba(255,215,0,0.4)',
+                    borderRadius: '10px', cursor: 'pointer',
+                    color: '#FFD700', fontSize: '14px', fontFamily: 'system-ui',
+                    fontWeight: 600, letterSpacing: '1px',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,215,0,0.35), rgba(255,180,0,0.25))';
+                    e.currentTarget.style.boxShadow = '0 0 30px rgba(255,215,0,0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,215,0,0.22), rgba(255,180,0,0.15))';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  🔄 开启新推演
+                </button>
               </div>
             )}
 

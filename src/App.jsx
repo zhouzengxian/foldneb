@@ -7,7 +7,7 @@ import DeliberationUI from './components/DeliberationUI.jsx';
 function LoadingScreen() {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setHidden(true), 1500);
+    const t = setTimeout(() => setHidden(true), 500);
     return () => clearTimeout(t);
   }, []);
   return (
