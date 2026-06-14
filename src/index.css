@@ -105,6 +105,12 @@ html, body, #root {
   background: #050520;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* 移动端：禁止双击缩放 & 橡皮筋回弹 */
+  touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* 滚动条 */
@@ -504,4 +510,26 @@ html, body, #root {
   flex-shrink: 0;
   color: #556677;
   font-size: 11px;
+}
+
+/* ===== 移动端全局补丁 ===== */
+@media (max-width: 600px) {
+  /* NebulaUI 左上角 */
+  .nebula-top-toolbar { top: 40px !important; left: 8px !important; }
+
+  /* DevProgressBar 顶部脉冲条缩小 */
+  .dev-progress-bar { padding: 4px 8px; gap: 6px; border-radius: 0 0 6px 6px; }
+  .dev-progress-bar .dev-label { font-size: 10px; }
+  .dev-progress-bar .pixel-text { font-size: 9px; }
+
+  /* Scene Demo 面板 */
+  .scenario-demo-card { padding: 16px 12px !important; max-width: 94vw !important; }
+
+  /* 调试面板 */
+  .debug-panel-card { max-width: 94vw !important; max-height: 80vh !important; padding: 12px !important; }
+}
+
+/* 矮屏手机（iPhone SE 等）：弹窗缩小 */
+@media (max-height: 700px) {
+  .archive-modal-card { max-height: 96vh !important; padding: 16px 14px !important; }
 }

@@ -73,11 +73,22 @@ export default function TemporalDeliberation() {
   const forkTriggeredRef = useRef(false);   // 防止分叉对比 auto-demo 重复触发
   const demoTypeAbortRef = useRef(false);   // 中断表单打字机
 
-  // 把主体内容容器滚动到底部
-  const scrollContentToBottom = useCallback((smooth = true) => {
+  // 慢速滚动到底部（自定义动画，避免浏览器 smooth 太快）
+  const scrollContentToBottom = useCallback((duration = 2500) => {
     const el = contentRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    const start = el.scrollTop;
+    const end = el.scrollHeight - el.clientHeight;
+    if (end <= start) return;
+    const startTime = performance.now();
+    const easeOut = (t) => 1 - Math.pow(1 - t, 3); //  ease-out 缓动
+    const step = (now) => {
+      const elapsed = (now - startTime) / duration;
+      if (elapsed >= 1) { el.scrollTop = end; return; }
+      el.scrollTop = start + (end - start) * easeOut(elapsed);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }, []);
 
   // 吸收从决策推演带入的预填 profile（横纵联动）
@@ -112,6 +123,7 @@ export default function TemporalDeliberation() {
 
         // 等 React 刷新 state 后自动开始
         setTimeout(() => {
+          console.log('[temporal-effect] 150ms timeout, startRef:', !!startRef.current, 'aborted:', demoTypeAbortRef.current);
           if (!demoTypeAbortRef.current && startRef.current) startRef.current();
         }, 150);
       } else {
@@ -287,18 +299,19 @@ export default function TemporalDeliberation() {
   // 同步 startTemporal 到 ref（autoStart 回调用，避免闭包过期）
   useEffect(() => { startRef.current = startTemporal; }, [startTemporal]);
 
-  // ===== Demo 链路：折叠完成后自动滚动到底 → 触发分叉对比 auto-demo =====
+  // ===== Demo 链路：折叠完成后从上往下渐进展示 → 触发分叉对比 auto-demo =====
   useEffect(() => {
     if (!demoChainActive || temporalPhase !== 'complete' || forkTriggeredRef.current) return;
     forkTriggeredRef.current = true;
     const timers = [];
-    // 2s 后滚动到底（让观众读完元洞察 + 信件摘要）
-    timers.push(setTimeout(() => scrollContentToBottom(true), 2000));
-    // 3.5s 再次滚动 + 触发分叉对比自动演示
+    // 停留 3s 让观众从顶部看完锚点矩阵 + 元洞察
+    timers.push(setTimeout(() => scrollContentToBottom(2500), 3000));
+    // 3.5s 触发分叉对比 auto-demo
     timers.push(setTimeout(() => {
-      scrollContentToBottom(true);
       setForkAutoTrigger(t => t + 1);
     }, 3500));
+    // 8s 后最终滚动（分叉对比结论已渲染完毕）
+    timers.push(setTimeout(() => scrollContentToBottom(3000), 8000));
     return () => timers.forEach(clearTimeout);
   }, [demoChainActive, temporalPhase, scrollContentToBottom]);
 

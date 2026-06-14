@@ -14,6 +14,8 @@ export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
   const toggleNarration = useNebulaStore((s) => s.toggleNarration);
   const takeScreenshot = useNebulaStore((s) => s.takeScreenshot);
   const screenshotReady = useNebulaStore((s) => s.screenshotReady);
+  const rotationSpeed = useNebulaStore((s) => s.rotationSpeed);
+  const setRotationSpeed = useNebulaStore((s) => s.setRotationSpeed);
   // 巡游演示期间隐藏，避免分散注意力
   // 注意：return 必须放在所有 hooks 之后，否则违反 React Hooks 规则导致崩溃
   const demoActive = useNebulaStore((s) => s.demoActive);
@@ -50,12 +52,13 @@ export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
   };
 
   return (
-    <div ref={wrapRef} style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 30, pointerEvents: 'auto' }}>
+    <div ref={wrapRef} style={{ position: 'fixed', bottom: (typeof window !== 'undefined' && window.innerWidth < 600) ? 40 : 24, left: 24, zIndex: 30, pointerEvents: 'auto' }}>
+
       <button
         onClick={() => setOpen(!open)}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        title="开发者工具"
+        title="更多功能"
         style={{
           display: 'flex', alignItems: 'center',
           background: open
@@ -76,7 +79,7 @@ export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
           opacity: (hovered || open) ? 1 : 0,
           marginLeft: (hovered || open) ? 6 : 0,
           overflow: 'hidden', transition: 'all 0.25s ease',
-        }}>开发者工具</span>
+        }}>更多功能</span>
       </button>
 
       {open && (
@@ -88,6 +91,38 @@ export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
         }}>
           <div style={{ fontSize: 10, color: 'rgba(255,180,80,0.55)', padding: '4px 8px 8px', letterSpacing: '0.12em' }}>
             🔧 更多功能
+          </div>
+
+          <div style={{
+            ...itemStyle,
+            flexDirection: 'column', alignItems: 'stretch', gap: 6,
+            cursor: 'default', background: 'rgba(255,180,80,0.06)',
+            borderColor: 'rgba(255,180,80,0.2)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#ffc878' }}>
+              <span>🌀 星体转速</span>
+              <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{rotationSpeed.toFixed(1)}x</span>
+            </div>
+            <input
+              type="range" min={0.2} max={5} step={0.1} value={rotationSpeed}
+              onChange={(e) => setRotationSpeed(e.target.value)}
+              title="调整星体/光环/相机自转速度"
+              style={{ width: '100%', accentColor: '#ffc878', cursor: 'pointer', height: 4 }}
+            />
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[1, 2, 3].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setRotationSpeed(n)}
+                  style={{
+                    flex: 1, padding: '2px 0', fontSize: 10, fontFamily: 'inherit', cursor: 'pointer',
+                    borderRadius: 4, border: '1px solid rgba(255,180,80,0.2)',
+                    background: Math.abs(rotationSpeed - n) < 0.05 ? 'rgba(255,180,80,0.25)' : 'rgba(255,180,80,0.05)',
+                    color: Math.abs(rotationSpeed - n) < 0.05 ? '#ffd49a' : '#a09080',
+                  }}
+                >{n}x</button>
+              ))}
+            </div>
           </div>
 
           <button
@@ -130,7 +165,7 @@ export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
             style={{ ...itemStyle, marginBottom: 0, color: '#FF6B6B', borderColor: 'rgba(255,100,100,0.22)' }}
           >
             <span>🔧</span>
-            <span>调试</span>
+            <span>调试（开发者工具）</span>
           </button>
         </div>
       )}

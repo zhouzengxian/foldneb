@@ -113,6 +113,7 @@ const useNebulaStore = create((set, get) => ({
   hoveredAgentId: null,
   cameraTarget: [0, 0, 0],
   autoRotate: true,
+  rotationSpeed: 1, // 星体旋转速度倍率（0.2~5x），开发者工具可调
   dialogueVisible: false,
   dialogueText: '',
   bubblePosition: null,
@@ -232,6 +233,7 @@ const useNebulaStore = create((set, get) => ({
   // V4.5：定位/聚焦某颗知识星球月球，让相机飞过去
   focusPlanet: (planetId) => set({ focusPlanetId: planetId, autoRotate: false }),
   clearFocusPlanet: () => set({ focusPlanetId: null, autoRotate: true }),
+  setRotationSpeed: (v) => { const n = Math.max(0.2, Math.min(5, Number(v) || 1)); set({ rotationSpeed: n }); },
   setHoveredAgent: (id) => set({ hoveredAgentId: id }),
   setCameraTarget: (pos) => set({ cameraTarget: pos }),
   setDialogueVisible: (v) => set({ dialogueVisible: v }),

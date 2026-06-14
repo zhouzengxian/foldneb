@@ -490,13 +490,16 @@ export default function DeliberationUI() {
     if (useNebulaStore.getState().deliberationAutoChain) {
       // 先平滑滚动到底，露出「带入时间折叠」按钮
       setTimeout(() => scrollContentToBottom(true), 200);
-      // 停留 2.8s 让观众读到报告 → 自动跳转（等价于自动点击「带入时间折叠」）
-      // 复用 handleLaunchTemporal，保证手动/自动路径都走同一套转场动画
+      // 停留 2.8s 让观众读到报告 → 自动跳转
+      // ⚠️ 直接读 store 而非用 handleLaunchTemporal 闭包（后者在 idle 阶段创建时捕获了 null 的 deliberationSession）
       setTimeout(() => {
         const cur = useNebulaStore.getState();
-        // 只在仍在 complete 阶段（用户没手动操作）且时间折叠未打开时自动跳
-        if (cur.deliberationPhase === 'complete' && !cur.temporalOpen) {
-          handleLaunchTemporal({ autoStart: true });
+        if (cur.deliberationPhase === 'complete' && !cur.temporalOpen && cur.deliberationSession) {
+          const prefill = buildTemporalPrefillFromDeliberation(cur.deliberationSession, cur.userProfile?.name);
+          if (!prefill) return;
+          cur.closeDeliberation();
+          cur.clearDeliberationAutoChain();
+          cur.openTemporalWithPrefill(prefill, { autoStart: true });
         }
       }, 3000);
     }

@@ -29,6 +29,8 @@ export default function NebulaUI() {
   const [studentTourActive, setStudentTourActive] = useState(false);
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
   const runDemo = useNebulaStore((s) => s.runDemo);
+  const stopDemo = useNebulaStore((s) => s.stopDemo);
+  const openDeliberationWithPrefill = useNebulaStore((s) => s.openDeliberationWithPrefill);
   const demoActive = useNebulaStore((s) => s.demoActive);
   // 自定义分身
   const customClone = useNebulaStore((s) => s.customClone);
@@ -66,7 +68,18 @@ export default function NebulaUI() {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }}>
       {/* ========== 顶部开发进度条（像素字 + 点状进度） ========== */}
-      <DevProgressBar runDemo={runDemo} />
+      <DevProgressBar
+        onLaunchStarTour={runDemo}
+        onLaunchFounderDemo={() => {
+          if (demoActive && stopDemo) stopDemo();
+          const P6 = '我的B2B SaaS产品过去6个月增长停滞，月新增从20%跌到3%，老客户留存还行但获客成本翻倍。是该加大销售投入抢存量市场，还是改产品定位寻找新市场？';
+          openDeliberationWithPrefill(P6, { autoChain: true });
+        }}
+        onLaunchStudentDemo={() => {
+          if (demoActive && stopDemo) stopDemo();
+          setStudentTourActive(true);
+        }}
+      />
       {/* ========== 左上 Logo + 工具栏 ========== */}
       <div style={{ position: 'absolute', top: 56, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>
         <div style={{ marginBottom: 8 }}>

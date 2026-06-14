@@ -113,6 +113,7 @@ function MoonNode({ planet, index, getPhysPos, onSelect, isFocused }) {
 
   useFrame((state) => {
     if (!groupRef.current || !moonRef.current) return;
+    const speed = useNebulaStore.getState().rotationSpeed || 1;
     const [px, py, pz] = getPhysPos('user');
     if (isNaN(px)) return;
 
@@ -130,7 +131,7 @@ function MoonNode({ planet, index, getPhysPos, onSelect, isFocused }) {
     if (ringRef.current) {
       const pulse = 1 + Math.sin(state.clock.elapsedTime * 3) * 0.08;
       ringRef.current.scale.setScalar(pulse);
-      ringRef.current.rotation.z += 0.01;
+      ringRef.current.rotation.z += 0.01 * speed;
     }
   });
 

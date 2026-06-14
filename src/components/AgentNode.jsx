@@ -92,6 +92,7 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
 
   useFrame((state) => {
     if (!groupRef.current) return;
+    const speed = useNebulaStore.getState().rotationSpeed || 1;
 
     // 位置跟随力导向物理
     if (getPhysPos) {
@@ -113,13 +114,13 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
       const s = ringRef.current.scale;
       s.setScalar(s.x + (targetRingScale.current - s.x) * lerp);
       ringRef.current.material.opacity += (targetRingOpacity.current - ringRef.current.material.opacity) * lerp;
-      ringRef.current.rotation.z += 0.005;
+      ringRef.current.rotation.z += 0.005 * speed;
     }
     if (glowMeshRef.current) {
       glowMeshRef.current.material.opacity += (targetGlowOpacity.current - glowMeshRef.current.material.opacity) * lerp;
     }
     if (selectedRingRef.current) {
-      selectedRingRef.current.rotation.z += 0.008;
+      selectedRingRef.current.rotation.z += 0.008 * speed;
       selectedRingRef.current.material.opacity = 0.15 + Math.sin(t * 2) * 0.08;
       selectedRingRef.current.scale.setScalar(1 + Math.sin(t * 2.5) * 0.06);
     }

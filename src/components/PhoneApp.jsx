@@ -6,13 +6,8 @@ import ContactsScreen from './PhoneApp/ContactsScreen';
 import ProfileScreen from './PhoneApp/ProfileScreen';
 
 // ====== iPhone 17 外观常量 ======
-const PHONE = {
-  w: 340,
-  h: 660,
-  radius: 32,
-  frameColor: '#2c2c2e',
-  bezel: 3,
-};
+const PHONE_DESKTOP = { w: 340, h: 660, radius: 32, frameColor: '#2c2c2e', bezel: 3 };
+const PHONE_MOBILE = { w: 230, h: 460, radius: 24, frameColor: '#2c2c2e', bezel: 2 };
 
 // ====== 主容器 ======
 export default function PhoneApp() {
@@ -27,6 +22,8 @@ export default function PhoneApp() {
 
   // 是否仍处于默认身份（未自定义过名字）→ 点击朋友圈直接引导去创建/修改身份
   const isDefaultIdentity = !userProfile || (userProfile.name === '探索者' && userProfile.avatar === '🌟');
+  const isSmall = typeof window !== 'undefined' && window.innerWidth < 600;
+  const PHONE = isSmall ? PHONE_MOBILE : PHONE_DESKTOP;
 
   const handleToggle = () => {
     if (isDefaultIdentity) {
@@ -43,12 +40,12 @@ export default function PhoneApp() {
       <div onClick={handleToggle}
         style={{
           position: 'fixed', right: 0, top: '50%', transform: 'translateY(-50%)',
-          zIndex: 60, borderRadius: '14px 0 0 14px',
-          padding: '16px 9px', cursor: 'pointer',
+          zIndex: 60, borderRadius: isSmall ? '10px 0 0 10px' : '14px 0 0 14px',
+          padding: isSmall ? '10px 6px' : '16px 9px', cursor: 'pointer',
           background: 'linear-gradient(135deg, #3a3a3c, #1c1c1e)',
           boxShadow: '-3px 0 24px rgba(0,0,0,0.45)',
           writingMode: 'vertical-rl', letterSpacing: '0.35em',
-          color: '#e5e5ea', fontSize: 13, fontWeight: 500,
+          color: '#e5e5ea', fontSize: isSmall ? 10 : 13, fontWeight: 500,
           transition: 'all 0.3s ease', userSelect: 'none',
           fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
         }}
@@ -68,7 +65,7 @@ export default function PhoneApp() {
 
   return (
     <div style={{
-      position: 'fixed', right: 20, top: '50%', transform: 'translateY(-50%)',
+      position: 'fixed', right: isSmall ? 8 : 20, top: '50%', transform: 'translateY(-50%)',
       zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
       {/* ==== iPhone 17 机身 ==== */}

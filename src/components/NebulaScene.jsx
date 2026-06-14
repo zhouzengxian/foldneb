@@ -64,6 +64,7 @@ function UserNode({ getPhysPos }) {
 
   useFrame((state) => {
     if (!groupRef.current) return;
+    const speed = useNebulaStore.getState().rotationSpeed || 1;
     const [px, py, pz] = getPhysPos('user');
     if (!isNaN(px)) groupRef.current.position.set(px, py, pz);
 
@@ -84,18 +85,18 @@ function UserNode({ getPhysPos }) {
     // 光环1 旋转
     if (ring1Ref.current) {
       ring1Ref.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.6) * 0.15;
-      ring1Ref.current.rotation.z += 0.005;
+      ring1Ref.current.rotation.z += 0.005 * speed;
       ring1Ref.current.material.opacity = 0.35 + Math.sin(t * 1.8) * 0.1;
     }
     // 光环2 反向旋转
     if (ring2Ref.current) {
       ring2Ref.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.4 + 1) * 0.2;
-      ring2Ref.current.rotation.z -= 0.003;
+      ring2Ref.current.rotation.z -= 0.003 * speed;
       ring2Ref.current.material.opacity = 0.15 + Math.sin(t * 2.2) * 0.06;
     }
     // 粒子旋转
     if (particleRef.current) {
-      particleRef.current.rotation.y += 0.002;
+      particleRef.current.rotation.y += 0.002 * speed;
       particleRef.current.rotation.x = Math.sin(t * 0.3) * 0.1;
       particleRef.current.material.opacity = 0.4 + Math.sin(t * 0.8) * 0.1;
     }
@@ -370,6 +371,7 @@ function CameraController({ getPos }) {
       // 拖拽 agent 时禁用相机控制（Obsidian 图谱式交互）
       controlsRef.current.enabled = !draggingNode;
       controlsRef.current.autoRotate = autoRotate && !draggingNode;
+      controlsRef.current.autoRotateSpeed = 0.15 * (useNebulaStore.getState().rotationSpeed || 1);
 
       if (focusAgentId && getPos) {
         const [tx, ty, tz] = getPos(focusAgentId);

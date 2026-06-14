@@ -55,6 +55,7 @@ export default function OnboardingGuide() {
   const step = STEPS[onboardingStep] || STEPS[0];
   const isLast = onboardingStep === STEPS.length - 1;
   const isBottom = step.position === 'bottom';
+  const isSmall = typeof window !== 'undefined' && window.innerWidth < 600;
 
   const overlayStyle = {
     ...overlay,
@@ -62,8 +63,8 @@ export default function OnboardingGuide() {
   };
 
   const cardStyle = {
-    ...card,
-    marginBottom: isBottom ? 36 : 0,
+    ...(isSmall ? cardSmall : card),
+    marginBottom: isBottom ? (isSmall ? 24 : 36) : 0,
     position: 'relative',
   };
 
@@ -84,21 +85,21 @@ export default function OnboardingGuide() {
           ))}
         </div>
 
-        <div style={{ fontSize: 24, fontWeight: 700, fontFamily:'"Noto Serif SC",serif', color:'#fff', textAlign:'center', marginBottom: 10 }}>
+        <div style={{ fontSize: isSmall ? 18 : 24, fontWeight: 700, fontFamily:'"Noto Serif SC",serif', color:'#fff', textAlign:'center', marginBottom: isSmall ? 6 : 10 }}>
           {step.title}
         </div>
-        <p style={{ fontSize: 13, lineHeight: 1.8, color: '#BCC8E0', textAlign:'center', marginBottom: 24, whiteSpace: 'pre-line' }}>
+        <p style={{ fontSize: isSmall ? 11 : 13, lineHeight: 1.7, color: '#BCC8E0', textAlign:'center', marginBottom: isSmall ? 14 : 24, whiteSpace: 'pre-line' }}>
           {step.desc}
         </p>
 
         <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
           {onboardingStep > 0 && (
-            <button onClick={prevOnboardingStep} style={secondaryBtn}>上一步</button>
+            <button onClick={prevOnboardingStep} style={isSmall ? secondaryBtnSmall : secondaryBtn}>上一步</button>
           )}
-          <button onClick={isLast ? completeOnboarding : nextOnboardingStep} style={primaryBtn}>
+          <button onClick={isLast ? completeOnboarding : nextOnboardingStep} style={isSmall ? primaryBtnSmall : primaryBtn}>
             {isLast ? '进入星河 ✦' : '知道了'}
           </button>
-          <button onClick={skipOnboarding} style={skipBtn}>跳过</button>
+          <button onClick={skipOnboarding} style={isSmall ? skipBtnSmall : skipBtn}>跳过</button>
         </div>
       </div>
     </div>
@@ -106,8 +107,12 @@ export default function OnboardingGuide() {
 }
 
 const overlay = { position:'fixed', inset:0, zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(2,2,16,0.75)', backdropFilter:'blur(8px)' };
+const cardSmall = { background:'rgba(8,8,28,0.95)', backdropFilter:'blur(24px)', borderRadius:16, border:'1px solid rgba(255,255,255,0.1)', padding:'18px 14px', maxWidth:340, width:'92%', boxShadow:'0 16px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,215,0,0.05)' };
 const card = { background:'rgba(8,8,28,0.95)', backdropFilter:'blur(24px)', borderRadius:20, border:'1px solid rgba(255,255,255,0.1)', padding:'36px', maxWidth:420, width:'90%', boxShadow:'0 16px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,215,0,0.05)' };
 const arrowUp = { position:'absolute', top:-10, left:'50%', transform:'translateX(-50%)', width:0, height:0, borderLeft:'10px solid transparent', borderRight:'10px solid transparent', borderBottom:'10px solid rgba(8,8,28,0.95)' };
 const primaryBtn = { padding:'10px 28px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#FFD700,#FF8C42)', color:'#000', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:'inherit' };
+const primaryBtnSmall = { padding:'8px 20px', borderRadius:8, border:'none', background:'linear-gradient(135deg,#FFD700,#FF8C42)', color:'#000', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit' };
 const secondaryBtn = { padding:'10px 20px', borderRadius:10, border:'1px solid rgba(255,255,255,0.15)', background:'transparent', color:'#ccc', fontWeight:600, fontSize:13, cursor:'pointer', fontFamily:'inherit' };
+const secondaryBtnSmall = { padding:'8px 14px', borderRadius:8, border:'1px solid rgba(255,255,255,0.15)', background:'transparent', color:'#ccc', fontWeight:600, fontSize:12, cursor:'pointer', fontFamily:'inherit' };
 const skipBtn = { padding:'10px 20px', borderRadius:10, border:'none', background:'transparent', color:'#667', fontSize:13, cursor:'pointer', fontFamily:'inherit' };
+const skipBtnSmall = { padding:'8px 14px', borderRadius:8, border:'none', background:'transparent', color:'#667', fontSize:12, cursor:'pointer', fontFamily:'inherit' };

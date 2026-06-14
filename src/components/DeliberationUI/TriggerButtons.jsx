@@ -4,11 +4,12 @@ import useNebulaStore from '../../store/useNebulaStore';
 export default function TriggerButtons() {
   const openTemporal = useNebulaStore(s => s.openTemporal);
   const openDeliberation = useNebulaStore(s => s.openDeliberation);
+  const isSmall = typeof window !== 'undefined' && window.innerWidth < 600;
 
   return (
     <div style={{
-      position: 'fixed', bottom: 8, right: 8, zIndex: 30,
-      display: 'flex', gap: 8,
+      position: 'fixed', bottom: isSmall ? 4 : 8, right: isSmall ? 4 : 8, zIndex: 30,
+      display: 'flex', gap: isSmall ? 4 : 8,
     }}>
       <button
         onClick={openDeliberation}
@@ -16,8 +17,8 @@ export default function TriggerButtons() {
         style={{
           background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,180,0,0.15))',
           border: '1px solid rgba(255,215,0,0.35)',
-          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
-          color: '#FFD700', fontSize: '13px', fontFamily: 'system-ui',
+          borderRadius: isSmall ? '8px' : '10px', padding: isSmall ? '5px 9px' : '8px 14px', cursor: 'pointer',
+          color: '#FFD700', fontSize: isSmall ? '11px' : '13px', fontFamily: 'system-ui',
           fontWeight: 600, letterSpacing: '0.5px',
           boxShadow: '0 0 20px rgba(255,215,0,0.08)',
         }}
@@ -30,8 +31,8 @@ export default function TriggerButtons() {
         style={{
           background: 'linear-gradient(135deg, rgba(68,136,255,0.2), rgba(68,100,255,0.15))',
           border: '1px solid rgba(68,136,255,0.4)',
-          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
-          color: '#8cf', fontSize: '13px', fontFamily: 'system-ui',
+          borderRadius: isSmall ? '8px' : '10px', padding: isSmall ? '5px 9px' : '8px 14px', cursor: 'pointer',
+          color: '#8cf', fontSize: isSmall ? '11px' : '13px', fontFamily: 'system-ui',
           fontWeight: 600, letterSpacing: '0.5px',
           boxShadow: '0 0 20px rgba(68,136,255,0.1)',
         }}
