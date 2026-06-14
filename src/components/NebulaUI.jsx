@@ -91,8 +91,21 @@ export default function NebulaUI() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }}>
+      {/* ========== 顶部开发进度条（像素字 + 点状进度） ========== */}
+      <div className="dev-progress-bar">
+        <div className="dot-track">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <span
+              key={i}
+              className={`dot${i < 8 ? ' on' : ''}${i === 7 ? ' head' : ''}`}
+            />
+          ))}
+        </div>
+        <div className="dev-label">开发进度</div>
+        <div className="pixel-text">80%</div>
+      </div>
       {/* ========== 左上 Logo + 工具栏 ========== */}
-      <div style={{ position: 'absolute', top: 24, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>
+      <div style={{ position: 'absolute', top: 56, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>
         <div style={{ marginBottom: 8 }}>
           <div style={{
             fontSize: 20, fontWeight: 700, color: '#FFD700', letterSpacing: '0.12em',
@@ -102,19 +115,6 @@ export default function NebulaUI() {
             125位思想者 · 13个星系
           </div>
           <div style={{ width: 140, height: 1, background: 'linear-gradient(90deg, rgba(255,215,0,0.4), transparent)', marginTop: 6 }} />
-          <div style={{
-            marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '3px 10px', borderRadius: 12,
-            background: 'rgba(100,255,180,0.08)', border: '1px solid rgba(100,255,180,0.2)',
-            fontSize: 10, color: '#64ffb4', letterSpacing: '0.08em',
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: '50%',
-              background: '#64ffb4', boxShadow: '0 0 6px rgba(100,255,180,0.6)',
-              animation: 'pulse 2s ease-in-out infinite',
-            }} />
-            开发进度 80%
-          </div>
         </div>
         {!demoActive && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
