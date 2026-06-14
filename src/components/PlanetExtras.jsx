@@ -113,8 +113,11 @@ function PlanetValuePanel({planet,posts}){
   const ang=i=>(Math.PI*2*i/N)-Math.PI/2;
   const pt=(i,r)=>`${cx+Math.cos(ang(i))*r},${cy+Math.sin(ang(i))*r}`;
   const poly=r=>[0,1,2,3,4].map(i=>pt(i,r)).join(' ');
+  const isEmpty=postCount===0;
+  const preview=[70,65,75,55,60];
   const dataPoly=radar.map((x,i)=>pt(i,(x.v/100)*R)).join(' ');
-  const verdict=score>=70?'🔥 高价值星球：产出活跃、AI 协作充分，知识资产持续增值。':score>=35?'✨ 成长中星球：持续铸造，价值正在积累。':'🌱 新生星球：开始铸造知识卡片，让价值可视化生长。';
+  const previewPoly=preview.map((v,i)=>pt(i,(v/100)*R)).join(' ');
+  const verdict=isEmpty?'🌱 新生星球：金色虚线是你成长后的目标态。点「✎ 铸造」第一篇知识卡片，让价值雷达开始生长。':(score>=70?'🔥 高价值星球：产出活跃、AI 协作充分，知识资产持续增值。':score>=35?'✨ 成长中星球：持续铸造，价值正在积累。':'🌱 新生星球：开始铸造知识卡片，让价值可视化生长。');
   return (
     <div style={{background:'#1a1a24',padding:'16px 14px',color:'#fff'}}>
       <div style={{fontSize:13,fontWeight:600,marginBottom:12,fontFamily:FONT,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -141,6 +144,7 @@ function PlanetValuePanel({planet,posts}){
         <svg width="140" height="140" viewBox="0 0 140 140" style={{flexShrink:0}}>
           {[0.25,0.5,0.75,1].map(r=>(<polygon key={r} points={poly(R*r)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.5"/>))}
           {[0,1,2,3,4].map(i=>(<line key={i} x1={cx} y1={cy} x2={cx+Math.cos(ang(i))*R} y2={cy+Math.sin(ang(i))*R} stroke="rgba(255,255,255,0.08)" strokeWidth="0.5"/>))}
+          {isEmpty && <polygon points={previewPoly} fill="rgba(255,215,0,0.08)" stroke="rgba(255,215,0,0.45)" strokeWidth="1" strokeDasharray="3 2"/>}
           <polygon points={dataPoly} fill="rgba(184,212,255,0.25)" stroke="#b8d4ff" strokeWidth="1.5"/>
           {radar.map((x,i)=>(<circle key={i} cx={cx+Math.cos(ang(i))*(x.v/100)*R} cy={cy+Math.sin(ang(i))*(x.v/100)*R} r="2" fill="#cfe2ff"/>))}
           {radar.map((x,i)=>(<text key={i} x={cx+Math.cos(ang(i))*(R+13)} y={cy+Math.sin(ang(i))*(R+13)} fill="rgba(255,255,255,0.7)" fontSize="9" textAnchor="middle" dominantBaseline="middle" fontFamily={FONT}>{x.l}</text>))}
