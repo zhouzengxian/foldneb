@@ -5,6 +5,23 @@ import { tryOpenObsidianWithFallback } from '../utils/obsidianLink.js';
 import DialoguePanel from './DialoguePanel.jsx';
 import CloneCreator from './CloneCreator.jsx';
 import CustomCloneChat from './CustomCloneChat.jsx';
+import {
+  generateBusinessAnalysis,
+  renderMarkdown,
+  isApiConfigured,
+  getApiConfig,
+  saveApiConfig,
+} from '../utils/analysisApi.js';
+import {
+  getSkills,
+  getActiveSkill,
+  addSkill,
+  updateSkill,
+  deleteSkill,
+  resetBuiltinSkill,
+  setActiveSkillId as persistActiveSkill,
+  skillToMarkdown,
+} from '../utils/analysisPrompt.js';
 
 export default function NebulaUI() {
   const selectedAgent = useNebulaStore((s) => s.selectedAgent);
@@ -27,6 +44,20 @@ export default function NebulaUI() {
   const [showDistrictPanel, setShowDistrictPanel] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
+
+  // ===== 右侧「近期深度分析」栏状态 =====
+  // analysisByAgent: { [agentId]: { markdown, date, trigger, source } }  source: 'preset'|'generated'
+  const [analysisByAgent, setAnalysisByAgent] = useState({});
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
+  const [showApiConfig, setShowApiConfig] = useState(false);
+  const [apiConfigForm, setApiConfigForm] = useState(getApiConfig());
+
+  // ===== Skill 管理状态 =====
+  const [activeSkill, setActiveSkillState] = useState(getActiveSkill());
+  const [skillManagerOpen, setSkillManagerOpen] = useState(false);
+  const [editingSkill, setEditingSkill] = useState(null); // 正在编辑的 skill 副本（null=列表态）
+  const [isCreatingSkill, setIsCreatingSkill] = useState(false);
   const runDemo = useNebulaStore((s) => s.runDemo);
   const demoActive = useNebulaStore((s) => s.demoActive);
   const demoSubtitle = useNebulaStore((s) => s.demoSubtitle);
@@ -102,6 +133,126 @@ export default function NebulaUI() {
         ); } catch {}
       },
     });
+  };
+
+  /**
+   * 一键生成「商业动态逻辑深度分析」
+   * 调用大模型，流式回填到右侧栏
+   */
+  const handleGenerateAnalysis = async () => {
+    if (!agent || analysisLoading) return;
+    if (!isApiConfigured()) {
+      setAnalysisError('请先配置 API Key（点击右上方 ⚙️）');
+      setShowApiConfig(true);
+      return;
+    }
+    setAnalysisLoading(true);
+    setAnalysisError('');
+    try {
+      const md = await generateBusinessAnalysis(agent, (full) => {
+        setAnalysisByAgent((prev) => ({
+          ...prev,
+          [agent.id]: { markdown: full, date: '', trigger: '', source: 'generating' },
+        }));
+      });
+      setAnalysisByAgent((prev) => ({
+        ...prev,
+        [agent.id]: {
+          markdown: md,
+          date: new Date().toISOString().slice(0, 10),
+          trigger: 'AI 实时生成',
+          source: 'generated',
+        },
+      }));
+    } catch (e) {
+      setAnalysisError(e.message === 'NO_API_KEY' ? '请先配置 API Key' : `生成失败：${e.message}`);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  /** 保存 API 配置 */
+  const handleSaveApiConfig = () => {
+    saveApiConfig(apiConfigForm);
+    setShowApiConfig(false);
+    setAnalysisError('');
+  };
+
+  // ===== Skill 管理操作 =====
+
+  /** 切换激活 skill */
+  const handleSelectSkill = (id) => {
+    persistActiveSkill(id);
+    const s = getSkills().find((x) => x.id === id);
+    if (s) setActiveSkillState(s);
+  };
+
+  /** 保存编辑中的 skill */
+  const handleSaveSkillEdit = () => {
+    if (!editingSkill?.name?.trim()) return;
+    updateSkill(editingSkill.id, {
+      name: editingSkill.name.trim(),
+      emoji: editingSkill.emoji?.trim() || '⚡',
+      description: editingSkill.description,
+      prompt: editingSkill.prompt,
+    });
+    setEditingSkill(null);
+    setIsCreatingSkill(false);
+    setActiveSkillState(getActiveSkill());
+  };
+
+  /** 新建 skill */
+  const handleCreateSkill = () => {
+    const s = addSkill({
+      name: '新建 Skill',
+      emoji: '⚡',
+      description: '',
+      prompt:
+        '你是……（在此编写大模型 system prompt）\n\n## 分析对象\n- 姓名：{{agent.name}}\n- 身份：{{agent.title}}\n- 简介：{{agent.description}}\n\n## 任务\n（描述你希望大模型做什么）\n',
+    });
+    persistActiveSkill(s.id);
+    setActiveSkillState(s);
+    setEditingSkill({ ...s });
+    setIsCreatingSkill(true);
+  };
+
+  /** 删除 skill（内置不可删） */
+  const handleDeleteSkill = (id) => {
+    const skill = getSkills().find((s) => s.id === id);
+    if (skill?.builtin) return;
+    if (!window.confirm('确定删除这个 Skill？此操作不可撤销。')) return;
+    deleteSkill(id);
+    setActiveSkillState(getActiveSkill());
+  };
+
+  /** 恢复内置 skill 到原始版本 */
+  const handleResetBuiltin = () => {
+    if (!window.confirm('恢复内置 Skill 到原始版本？当前对该 Skill 的编辑将被覆盖。')) return;
+    resetBuiltinSkill();
+    setEditingSkill(null);
+    setActiveSkillState(getActiveSkill());
+  };
+
+  /** 导出 skill 为 md（下载文件 + 复制到剪贴板，供 Obsidian 本地留痕） */
+  const handleExportSkill = (skill) => {
+    const md = skillToMarkdown(skill);
+    try { navigator.clipboard.writeText(md); } catch {}
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(skill.name || 'skill').replace(/[<>:"/\\|?*]/g, '-')}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Skill 管理面板里的小按钮统一样式
+  const miniBtn = {
+    padding: '3px 8px', borderRadius: 5, fontSize: 9.5, cursor: 'pointer',
+    fontFamily: 'inherit', background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(136,153,204,0.2)', color: '#a8b8d0',
   };
 
   return (
@@ -452,22 +603,24 @@ export default function NebulaUI() {
       {archiveModalOpen && agent && (
         <div
           onClick={() => setArchiveModalOpen(false)}
+          className="archive-modal-overlay"
           style={{
             position: 'fixed', inset: 0, zIndex: 100,
             background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'auto', padding: 20,
+            pointerEvents: 'auto',
             animation: 'fadeIn 0.2s ease-out',
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            className="archive-modal-card"
             style={{
-              width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+              maxHeight: '90vh', overflowY: 'auto',
               background: 'linear-gradient(180deg, rgba(15,12,40,0.98), rgba(8,6,24,0.98))',
               borderRadius: 18, border: `1px solid ${agent.color}33`,
               boxShadow: `0 20px 80px rgba(0,0,0,0.6), 0 0 60px ${agent.color}15`,
-              padding: '24px 28px', color: '#e8f0ff', position: 'relative',
+              color: '#e8f0ff', position: 'relative',
               fontFamily: 'inherit',
             }}
           >
@@ -503,6 +656,11 @@ export default function NebulaUI() {
                 </div>
               </div>
             </div>
+
+            {/* ===== 两栏布局容器：左=基础资料 / 右=近期深度分析 ===== */}
+            <div className="archive-two-col">
+            {/* ===== 左栏：基础资料 ===== */}
+            <div className="archive-left-col">
 
             {/* 一句话简介（原有 description 字段） */}
             {agent.description && (
@@ -782,6 +940,304 @@ export default function NebulaUI() {
                 URI 已复制到剪贴板，可在本地浏览器地址栏粘贴试用。
               </div>
             )}
+            </div>{/* /左栏 */}
+
+            {/* ===== 右栏：近期深度分析 ===== */}
+            <aside className="archive-right-col">
+              <div style={{
+                fontSize: 11, color: '#88ddaa', marginBottom: 10,
+                letterSpacing: '0.15em', fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 6,
+                justifyContent: 'space-between',
+              }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 3, height: 12, background: '#88ddaa', borderRadius: 2 }} />
+                  {activeSkill.emoji} {activeSkill.name}
+                </span>
+                <button
+                  onClick={() => { setSkillManagerOpen(!skillManagerOpen); setEditingSkill(null); }}
+                  style={{
+                    background: 'transparent', border: '1px solid rgba(136,221,170,0.25)',
+                    color: '#88ddaa', fontSize: 9.5, padding: '2px 8px', borderRadius: 10,
+                    cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.05em',
+                  }}
+                  title="管理 / 编辑 / 新增 Skill（大模型指令模板）"
+                >
+                  Skill 库 {skillManagerOpen ? '▲' : '▼'}
+                </button>
+              </div>
+
+              {/* ===== Skill 管理面板 ===== */}
+              {skillManagerOpen && (
+                <div style={{
+                  marginBottom: 12, padding: 10, borderRadius: 10,
+                  background: 'rgba(136,221,170,0.04)',
+                  border: '1px solid rgba(136,221,170,0.18)',
+                }}>
+                  {editingSkill ? (
+                    /* ---- 编辑态 ---- */
+                    <div>
+                      <div style={{ fontSize: 9.5, color: '#88ddaa', marginBottom: 8, letterSpacing: '0.05em' }}>
+                        ✎ 编辑 Skill 指令模板
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <input
+                          value={editingSkill.emoji}
+                          onChange={(e) => setEditingSkill({ ...editingSkill, emoji: e.target.value })}
+                          placeholder="🦐"
+                          style={{ width: 50, padding: '6px', textAlign: 'center', borderRadius: 6,
+                            background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
+                            color: '#e8f0ff', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
+                        />
+                        <input
+                          value={editingSkill.name}
+                          onChange={(e) => setEditingSkill({ ...editingSkill, name: e.target.value })}
+                          placeholder="Skill 名称"
+                          style={{ flex: 1, padding: '6px 8px', borderRadius: 6,
+                            background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
+                            color: '#e8f0ff', fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
+                        />
+                      </div>
+                      <input
+                        value={editingSkill.description}
+                        onChange={(e) => setEditingSkill({ ...editingSkill, description: e.target.value })}
+                        placeholder="一句话描述这个 Skill 做什么"
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, marginBottom: 8, boxSizing: 'border-box',
+                          background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
+                          color: '#e8f0ff', fontSize: 11, fontFamily: 'inherit', outline: 'none' }}
+                      />
+                      <div style={{ fontSize: 9, color: '#7788aa', marginBottom: 4, lineHeight: 1.6 }}>
+                        Prompt 模板 · 占位符（生成时自动替换为当前人物）：
+                        <code style={{ color: '#88ddaa' }}>{'{'}{`{agent.name}`}{'}'}</code>{' '}
+                        <code style={{ color: '#88ddaa' }}>{'{'}{`{agent.title}`}{'}'}</code>{' '}
+                        <code style={{ color: '#88ddaa' }}>{'{'}{`{agent.description}`}{'}'}</code>{' '}
+                        <code style={{ color: '#88ddaa' }}>{'{'}{`{agent.philosophy}`}{'}'}</code>
+                      </div>
+                      <textarea
+                        value={editingSkill.prompt}
+                        onChange={(e) => setEditingSkill({ ...editingSkill, prompt: e.target.value })}
+                        spellCheck={false}
+                        style={{ width: '100%', minHeight: 240, padding: '8px', borderRadius: 6, marginBottom: 8, boxSizing: 'border-box',
+                          background: 'rgba(10,8,20,0.85)', border: '1px solid rgba(136,153,204,0.3)',
+                          color: '#c5d0e0', fontSize: 10.5, fontFamily: 'Consolas, "Cascadia Code", monospace', outline: 'none',
+                          lineHeight: 1.6, resize: 'vertical' }}
+                      />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={handleSaveSkillEdit} style={{ flex: 1, padding: '7px', borderRadius: 6,
+                          background: 'rgba(136,221,170,0.2)', border: '1px solid rgba(136,221,170,0.4)',
+                          color: '#88ddaa', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                          ✓ 保存 Skill
+                        </button>
+                        <button onClick={() => { setEditingSkill(null); setIsCreatingSkill(false); }} style={{ padding: '7px 14px', borderRadius: 6,
+                          background: 'transparent', border: '1px solid rgba(136,153,204,0.3)',
+                          color: '#8899bb', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ---- 列表态 ---- */
+                    <div>
+                      {getSkills().map((s) => (
+                        <div key={s.id} style={{
+                          padding: '8px', marginBottom: 6, borderRadius: 8,
+                          background: s.id === activeSkill.id ? 'rgba(136,221,170,0.1)' : 'rgba(255,255,255,0.02)',
+                          border: '1px solid ' + (s.id === activeSkill.id ? 'rgba(136,221,170,0.4)' : 'rgba(255,255,255,0.05)'),
+                        }}>
+                          <div style={{ fontSize: 11, color: '#e8f0ff', fontWeight: 600, marginBottom: 3 }}>
+                            {s.emoji} {s.name}
+                            {s.id === activeSkill.id && <span style={{ fontSize: 8.5, color: '#88ddaa', marginLeft: 6 }}>● 当前</span>}
+                            {s.builtin && <span style={{ fontSize: 8.5, color: '#7788aa', marginLeft: 4 }}>· 内置</span>}
+                            {s.builtin_edited && <span style={{ fontSize: 8.5, color: '#ffaa66', marginLeft: 4 }}>· 已编辑</span>}
+                          </div>
+                          {s.description && <div style={{ fontSize: 9.5, color: '#8899bb', lineHeight: 1.5, marginBottom: 5 }}>{s.description}</div>}
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {s.id !== activeSkill.id && (
+                              <button onClick={() => handleSelectSkill(s.id)} style={miniBtn}>设为当前</button>
+                            )}
+                            <button onClick={() => setEditingSkill({ ...s })} style={miniBtn}>✎ 编辑</button>
+                            <button onClick={() => handleExportSkill(s)} style={miniBtn} title="导出为 md 文件 + 复制（供 Obsidian 本地留痕）">⬇ 导出 md</button>
+                            {!s.builtin && (
+                              <button onClick={() => handleDeleteSkill(s.id)} style={{ ...miniBtn, color: '#ff9999' }}>✕ 删除</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <button onClick={handleCreateSkill} style={{ flex: 1, padding: '7px', borderRadius: 6,
+                          background: 'rgba(136,221,170,0.12)', border: '1px dashed rgba(136,221,170,0.35)',
+                          color: '#88ddaa', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          ＋ 新建 Skill
+                        </button>
+                        <button onClick={handleResetBuiltin} style={{ padding: '7px 10px', borderRadius: 6,
+                          background: 'transparent', border: '1px solid rgba(136,153,204,0.25)',
+                          color: '#8899bb', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                          title="恢复内置情报虾 Skill 到原始版本">
+                          ↺ 重置内置
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 8.5, color: '#6677aa', marginTop: 8, lineHeight: 1.6 }}>
+                        Skill = 大模型 system prompt 模板。编辑/新增后点「一键生成」即用新指令。所有数据存本地浏览器，可导出 md 留痕。
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 一键生成按钮 */}
+              <button
+                onClick={handleGenerateAnalysis}
+                disabled={analysisLoading}
+                className="analysis-gen-btn"
+                style={{
+                  width: '100%', padding: '10px', borderRadius: 10, marginBottom: 12,
+                  background: analysisLoading
+                    ? 'linear-gradient(135deg, rgba(136,221,170,0.1), rgba(136,221,170,0.05))'
+                    : 'linear-gradient(135deg, rgba(136,221,170,0.22), rgba(136,221,170,0.08))',
+                  border: '1px solid ' + (analysisLoading ? 'rgba(136,221,170,0.25)' : 'rgba(136,221,170,0.4)'),
+                  color: '#88ddaa', fontSize: 12, cursor: analysisLoading ? 'wait' : 'pointer',
+                  fontFamily: 'inherit', fontWeight: 600, letterSpacing: '0.05em',
+                  transition: 'all 0.2s', opacity: analysisLoading ? 0.7 : 1,
+                }}
+              >
+                {analysisLoading ? '⏳ 正在生成分析报告…' : activeSkill.emoji + ' ' + activeSkill.name + ' · 一键生成'}
+              </button>
+
+              {/* API 配置入口 */}
+              <button
+                onClick={() => setShowApiConfig(!showApiConfig)}
+                style={{
+                  width: '100%', padding: '5px', marginBottom: 10,
+                  background: 'transparent', border: 'none',
+                  color: isApiConfigured() ? '#88ddaa' : '#ffaa66',
+                  fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                  opacity: 0.7,
+                }}
+              >
+                {isApiConfigured() ? `⚙️ ${getApiConfig().model}` : '⚙️ 配置大模型 API（未配置）'}
+              </button>
+
+              {/* API 配置表单 */}
+              {showApiConfig && (
+                <div style={{
+                  padding: 12, marginBottom: 12,
+                  background: 'rgba(255,255,255,0.03)', borderRadius: 10,
+                  border: '1px solid rgba(136,221,170,0.15)',
+                  fontSize: 11,
+                }}>
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={{ display: 'block', color: '#8899bb', marginBottom: 3 }}>API Base URL</label>
+                    <input
+                      type="text" value={apiConfigForm.baseURL}
+                      onChange={(e) => setApiConfigForm({ ...apiConfigForm, baseURL: e.target.value })}
+                      placeholder="https://api.openai.com/v1"
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6,
+                        background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
+                        color: '#e8f0ff', fontSize: 11, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={{ display: 'block', color: '#8899bb', marginBottom: 3 }}>API Key</label>
+                    <input
+                      type="password" value={apiConfigForm.apiKey}
+                      onChange={(e) => setApiConfigForm({ ...apiConfigForm, apiKey: e.target.value })}
+                      placeholder="sk-..."
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6,
+                        background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
+                        color: '#e8f0ff', fontSize: 11, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ display: 'block', color: '#8899bb', marginBottom: 3 }}>Model</label>
+                    <input
+                      type="text" value={apiConfigForm.model}
+                      onChange={(e) => setApiConfigForm({ ...apiConfigForm, model: e.target.value })}
+                      placeholder="gpt-4o / glm-4 / deepseek-chat ..."
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6,
+                        background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
+                        color: '#e8f0ff', fontSize: 11, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <button onClick={handleSaveApiConfig} style={{
+                    width: '100%', padding: '7px', borderRadius: 6,
+                    background: 'rgba(136,221,170,0.15)', border: '1px solid rgba(136,221,170,0.35)',
+                    color: '#88ddaa', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+                  }}>✓ 保存配置</button>
+                  <div style={{ fontSize: 9.5, color: '#7788aa', marginTop: 6, lineHeight: 1.5 }}>
+                    支持 OpenAI 兼容接口（GLM / DeepSeek / Kimi / 通义等）。Key 仅存于本地浏览器。
+                  </div>
+                </div>
+              )}
+
+              {/* 错误提示 */}
+              {analysisError && (
+                <div style={{
+                  padding: '8px 10px', marginBottom: 10, borderRadius: 8,
+                  background: 'rgba(255,120,120,0.08)', border: '1px solid rgba(255,120,120,0.2)',
+                  fontSize: 10.5, color: '#ff9999', lineHeight: 1.6,
+                }}>⚠️ {analysisError}</div>
+              )}
+
+              {/* 分析内容渲染 */}
+              {(() => {
+                const cached = analysisByAgent[agent.id];
+                const preset = agent.recentAnalysis;
+                const data = cached || (preset ? {
+                  markdown: preset.markdown,
+                  date: preset.date,
+                  trigger: preset.trigger,
+                  source: 'preset',
+                } : null);
+
+                if (analysisLoading && !cached) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#7788aa', fontSize: 11 }}>
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>🤖</div>
+                      大模型正在生成深度分析…
+                    </div>
+                  );
+                }
+
+                if (!data) {
+                  return (
+                    <div style={{
+                      padding: 24, textAlign: 'center', borderRadius: 10,
+                      background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(136,153,204,0.2)',
+                      color: '#8899bb', fontSize: 11, lineHeight: 1.8,
+                    }}>
+                      <div style={{ fontSize: 20, marginBottom: 8 }}>📊</div>
+                      暂无近期深度分析<br/>
+                      点击上方按钮，接入大模型一键生成
+                    </div>
+                  );
+                }
+
+                return (
+                  <>
+                    {/* 元信息条 */}
+                    <div style={{
+                      fontSize: 9.5, color: '#7788aa', marginBottom: 8, lineHeight: 1.6,
+                      padding: '6px 8px', background: 'rgba(136,221,170,0.04)', borderRadius: 6,
+                      borderLeft: '2px solid rgba(136,221,170,0.3)',
+                    }}>
+                      {data.date && <div>📅 {data.date}</div>}
+                      {data.trigger && <div style={{ marginTop: 2 }}>🎯 {data.trigger}</div>}
+                      <div style={{ marginTop: 2, opacity: 0.6 }}>
+                        {data.source === 'preset' ? '📋 预置样本分析' :
+                         data.source === 'generating' ? '⏳ 生成中…' :
+                         '✨ AI 实时生成'}
+                      </div>
+                    </div>
+                    {/* Markdown 渲染 */}
+                    <div
+                      className="analysis-md-body"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(data.markdown) }}
+                    />
+                  </>
+                );
+              })()}
+            </aside>
+            </div>{/* /两栏容器 */}
           </div>
         </div>
       )}

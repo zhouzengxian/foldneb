@@ -227,3 +227,152 @@ html, body, #root {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.8; }
 }
+
+/* ===== 深度档案 Modal · 响应式（电脑宽 / 手机自适应） ===== */
+.archive-modal-overlay {
+  padding: 24px;
+}
+
+.archive-modal-card {
+  width: 100%;
+  max-width: 880px;
+  padding: 32px 40px;
+}
+
+/* 平板：略收窄 */
+@media (max-width: 900px) {
+  .archive-modal-overlay { padding: 16px; }
+  .archive-modal-card {
+    max-width: 100%;
+    padding: 24px 24px;
+  }
+}
+
+/* 手机：几乎全屏 */
+@media (max-width: 600px) {
+  .archive-modal-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+  .archive-modal-card {
+    max-width: 100%;
+    padding: 20px 16px;
+    border-radius: 14px !important;
+    max-height: 100vh !important;
+  }
+}
+
+/* ===== 两栏布局：左=基础资料 / 右=近期深度分析 ===== */
+.archive-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* 中间分隔线 */
+.archive-right-col {
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  padding-left: 24px;
+  position: sticky;
+  top: 0;
+}
+
+/* 平板/窄屏：右栏降到下方 */
+@media (max-width: 1200px) {
+  .archive-two-col {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .archive-right-col {
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-left: 0;
+    padding-top: 20px;
+    position: static;
+  }
+}
+
+/* ===== 深度分析 Markdown 渲染样式 ===== */
+.analysis-md-body {
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: #c5d0e0;
+}
+.analysis-md-body h3,
+.analysis-md-body h4 {
+  color: #e8f0ff;
+  font-weight: 600;
+  margin: 14px 0 8px;
+  line-height: 1.4;
+}
+.analysis-md-body h3 { font-size: 14px; }
+.analysis-md-body h4 { font-size: 12.5px; color: #88ddaa; }
+.analysis-md-body p {
+  margin: 0 0 8px;
+  color: #b8c4d8;
+}
+.analysis-md-body strong {
+  color: #e8f0ff;
+  font-weight: 600;
+}
+.analysis-md-body code {
+  font-size: 10.5px;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: #ffd7a0;
+}
+.analysis-md-body pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.analysis-md-body pre code {
+  background: none;
+  padding: 0;
+  color: #a8c8e0;
+}
+.analysis-md-body blockquote {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(136, 221, 170, 0.05);
+  border-left: 3px solid rgba(136, 221, 170, 0.4);
+  border-radius: 0 6px 6px 0;
+  color: #cce0d4;
+  font-size: 11px;
+}
+.analysis-md-body ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.analysis-md-body ul li {
+  margin-bottom: 4px;
+  color: #b8c4d8;
+}
+.analysis-md-body hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 12px 0;
+}
+.analysis-md-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 10.5px;
+}
+.analysis-md-body table th {
+  background: rgba(136, 221, 170, 0.1);
+  color: #88ddaa;
+  font-weight: 600;
+  padding: 5px 8px;
+  text-align: left;
+  border: 1px solid rgba(136, 221, 170, 0.15);
+}
+.analysis-md-body table td {
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #c0ccdc;
+}

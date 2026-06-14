@@ -1,5 +1,47 @@
 # Changelog · FoldNeb 折叠星云
 
+## V4.1 — Skill 化：用户可编辑的商业分析能力 + Obsidian 本地留痕 (2026-06-14)
+
+把「AI 商业情报分析」从硬编码 prompt 升级为**用户可编辑、可新增、可切换的 Skill 系统**，并实现三渠道本地留痕。
+
+### 新增文件
+| 文件 | 职责 |
+|------|------|
+| `skills/商业动态逻辑情报虾.md` | 内置 Skill 原版正文（项目内权威源 + 版本控制） |
+
+### 核心改动
+
+#### 1. Skill 数据化 + localStorage CRUD（`utils/analysisPrompt.js` 重写）
+- 内置 skill 提为可编辑数据结构（`id`/`name`/`emoji`/`description`/`prompt`/`builtin`/`builtin_edited`）
+- 占位符 prompt：`{{agent.name}}` `{{agent.title}}` `{{agent.description}}` `{{agent.philosophy}}`，生成时按当前人物替换
+- 全套 CRUD：`getSkills` / `saveSkills` / `addSkill` / `updateSkill` / `deleteSkill`（内置不可删）/ `resetBuiltinSkill`（恢复原版）/ `getActiveSkill` / `setActiveSkillId`
+- `skillToMarkdown` 导出（供 Obsidian 留痕）
+
+#### 2. 动态 system prompt（`utils/analysisApi.js`）
+- `generateBusinessAnalysis` 改用 `buildAnalysisPrompt(agent)` 按当前激活 skill 构建 system prompt
+- 三层框架（结构 / 逻辑 / 未来）+ 风格指南（看透本质 / 提前半步 / 可迁移模型 / 短句有力）+ 受众目标 + 核心能力圈 全部注入
+
+#### 3. Skill 管理面板（`NebulaUI.jsx`）
+- 右栏标题动态品牌名（`🦐 商业动态逻辑情报虾`）+ 「Skill 库 ▼」入口按钮
+- **列表态**：每个 skill 一张卡片（设为当前 / ✎ 编辑 / ⬇ 导出 md / ✕ 删除），底部 + 新建 Skill / ↺ 重置内置
+- **编辑态**：emoji / 名称 / 描述 / **prompt 大文本框**（240px，等宽字体）+ 占位符提示 + 保存/取消
+- 生成按钮文案动态：`🦐 商业动态逻辑情报虾 · 一键生成`
+
+#### 4. 本地留痕（三渠道）
+| 渠道 | 用途 |
+|------|------|
+| `foldneb/skills/*.md` | 项目内权威源，随 git 版本控制 |
+| Obsidian vault `5_skill库/*.md` | iCloud 同步，Obsidian 可检索 |
+| 运行时「⬇ 导出 md」 | 用户自定义 skill 实时导出（下载文件 + 复制剪贴板） |
+
+### 附：V4.0+ 思想者深度档案（前置工作，commit 3a2f33f）
+- `gameData.js` 黄仁勋/马斯克新增 6 类深度字段：`bio`(传记多段) / `timeline`(时间轴) / `philosophy`(核心思想) / `quotes`(语录+背景) / `works`(代表作) / `legacy`(影响启示)
+- `NebulaUI.jsx` Modal 全新渲染：6 大版块带视觉分隔（左竖条 + 英文副标题 + 渐变背景）
+- graceful fallback：无深度字段 agent 仍显原 description + dialogue，不破坏
+- 按钮文案差异化：有 bio 显「📖 查看深度档案」，无则「📄 查看完整档案」
+
+---
+
 ## V3.3 —— 朋友圈接入大模型：✦ AI 对话模式 (2026-06-14)
 
 核心 Agent 朋友圈接入大模型，新增 **Demo / ✦ AI 双模式切换** 与 **VIP 标识符**（会员认证风格）。
