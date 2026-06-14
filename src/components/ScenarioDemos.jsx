@@ -1,6 +1,6 @@
 /**
  * 场景 Demo 启动面板（V4.7）
- * 给评委一键入口演示两种典型用例：
+ * 一键入口演示两种典型用例：
  *   1. 💼 创业者推演：自动填充 P6 问题 + 进入决策推演 Demo 模式
  *   2. 🎓 学生探索：聚焦庄子 → 看金色连线到尼采 → 跳 Obsidian
  * 零额外 API 调用，纯本地演示。
@@ -44,7 +44,7 @@ export default function ScenarioDemos({ onClose, onLaunchStudent }) {
         '终局报告含杠铃策略 + 11 周执行节奏',
         '一键带入 ⏳ 时间折叠，让未来验证当下',
       ],
-      audience: '评委中的企业界 / 投资人',
+      audience: '企业界 / 投资人',
       cta: '开始推演',
       onLaunch: launchFounderDemo,
       accent: '#FFD700',
@@ -59,8 +59,9 @@ export default function ScenarioDemos({ onClose, onLaunchStudent }) {
         '相机自动聚焦「庄子」星体 + 弹详情卡',
         '看金色连线「超人 vs 逍遥」直通尼采',
         '详情卡支持一键跳转 Obsidian 原文笔记',
+        '\u00A0',
       ],
-      audience: '评委中的教育界 / 知识工作者',
+      audience: '教育界 / 知识工作者',
       cta: '聚焦庄子',
       onLaunch: launchStudentDemo,
       accent: '#7DF9FF',

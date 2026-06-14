@@ -3,15 +3,15 @@
  * 同一个「我」在 1年/3年/5年/10年后回看现在的决策
  * 流程：profile → generateFutureSelves → writeLetterToPast → crossTimelineReview → buildAnchorMatrix
  */
-import { callLLMWithProvider, DEFAULT_PROVIDER_ID, LLMUnavailableError, getApiErrorMessage } from './modelConfig';
-import { getDeliberationProvider } from './deliberationEngine';
+import { callLLMWithProvider, DEFAULT_PROVIDER_ID, LLMUnavailableError, getApiErrorMessage, getUnifiedProvider, setUnifiedProvider } from './modelConfig';
 
-let currentProviderId = getDeliberationProvider() || DEFAULT_PROVIDER_ID;
-export const setTemporalProvider = (id) => { currentProviderId = id || DEFAULT_PROVIDER_ID; };
-export const getTemporalProvider = () => currentProviderId;
+// 统一 Provider（全局共享，持久化 localStorage）
+// 保留别名兼容旧导入
+export const setTemporalProvider = setUnifiedProvider;
+export const getTemporalProvider = getUnifiedProvider;
 
 async function callLLM(systemPrompt, userPrompt, temperature = 0.7) {
-  return callLLMWithProvider(currentProviderId, systemPrompt, userPrompt, {
+  return callLLMWithProvider(getUnifiedProvider(), systemPrompt, userPrompt, {
     temperature, maxTokens: 1000, timeoutMs: 30000,
   });
 }

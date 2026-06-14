@@ -2,16 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import useNebulaStore from '../../store/useNebulaStore.js';
 
 /**
- * 右上角「🚧 开发中」下拉文件夹（V4.9）
+ * 左下角「开发者工具」下拉文件夹（V4.9）
  * 收纳尚未完善的功能入口：旁白 / 截图 / 场景 Demo / 调试
+ * 平常只显示一个小三角，hover 展开「开发者工具」文字，点击展开菜单（向上弹出）。
  * 点击外部自动收起。
  */
 export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const narrationEnabled = useNebulaStore((s) => s.narrationEnabled);
   const toggleNarration = useNebulaStore((s) => s.toggleNarration);
   const takeScreenshot = useNebulaStore((s) => s.takeScreenshot);
   const screenshotReady = useNebulaStore((s) => s.screenshotReady);
+  // 巡游演示期间隐藏，避免分散注意力
+  // 注意：return 必须放在所有 hooks 之后，否则违反 React Hooks 规则导致崩溃
+  const demoActive = useNebulaStore((s) => s.demoActive);
 
   const wrapRef = useRef(null);
 
@@ -32,6 +37,8 @@ export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
     return () => clearTimeout(t);
   }, [screenshotReady]);
 
+  if (demoActive) return null;
+
   const itemStyle = {
     display: 'flex', alignItems: 'center', gap: 8,
     width: '100%', textAlign: 'left',
@@ -43,30 +50,44 @@ export default function DevFolder({ onOpenScenarioDemos, onOpenDebug }) {
   };
 
   return (
-    <div ref={wrapRef} style={{ position: 'fixed', top: 24, right: 24, zIndex: 30, pointerEvents: 'auto' }}>
+    <div ref={wrapRef} style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 30, pointerEvents: 'auto' }}>
       <button
         onClick={() => setOpen(!open)}
-        title="尚未完善的功能"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        title="开发者工具"
         style={{
-          background: open ? 'rgba(255,180,80,0.22)' : 'rgba(255,180,80,0.12)',
-          border: '1px solid rgba(255,180,80,0.35)',
-          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center',
+          background: open
+            ? 'rgba(255,180,80,0.22)'
+            : (hovered ? 'rgba(255,180,80,0.16)' : 'rgba(255,180,80,0.06)'),
+          border: '1px solid rgba(255,180,80,0.3)',
+          borderRadius: '10px', padding: '8px 12px', cursor: 'pointer',
           color: '#ffc878', fontSize: 13, fontFamily: 'system-ui',
           fontWeight: 600, letterSpacing: '0.5px',
-          boxShadow: '0 0 20px rgba(255,180,80,0.1)',
-          transition: 'all 0.2s',
+          boxShadow: (hovered || open) ? '0 0 20px rgba(255,180,80,0.15)' : 'none',
+          overflow: 'hidden', whiteSpace: 'nowrap',
+          transition: 'all 0.25s ease',
         }}
-      >🚧 开发中 {open ? '▲' : '▼'}</button>
+      >
+        <span style={{ flexShrink: 0, fontSize: 11 }}>{open ? '▾' : '▴'}</span>
+        <span style={{
+          maxWidth: (hovered || open) ? 120 : 0,
+          opacity: (hovered || open) ? 1 : 0,
+          marginLeft: (hovered || open) ? 6 : 0,
+          overflow: 'hidden', transition: 'all 0.25s ease',
+        }}>开发者工具</span>
+      </button>
 
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 8, width: 210,
+          position: 'absolute', bottom: '100%', left: 0, marginBottom: 8, width: 210,
           background: 'rgba(10,8,20,0.94)', border: '1px solid rgba(255,180,80,0.22)',
           borderRadius: 12, backdropFilter: 'blur(16px)', padding: 8,
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         }}>
           <div style={{ fontSize: 10, color: 'rgba(255,180,80,0.55)', padding: '4px 8px 8px', letterSpacing: '0.12em' }}>
-            🔧 待完善功能
+            🔧 更多功能
           </div>
 
           <button

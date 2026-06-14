@@ -20,6 +20,32 @@ function saveToStorage(key, data) {
   } catch {}
 }
 
+// ========================================
+// 初始默认预设（全新用户 / 一键初始化后生效）
+// ========================================
+// 默认分身：灵感缪斯（用户可在「创建分身」里随时修改）
+const DEFAULT_CUSTOM_CLONE = {
+  name: '灵感缪斯',
+  avatar: '🎨',
+  bio: '点燃创意的灵感精灵',
+  style: '奔放、诗意、发散，爱用画面感的语言，鼓励跳跃联想和自由表达',
+  replyMode: 'template',
+  imaConfig: null,
+};
+
+// 默认知识灵感月球：灵感月球（用户可改名 / 删除 / 新增）
+const DEFAULT_USER_PLANETS = [
+  {
+    id: 'planet_default_inspire',
+    name: '灵感月球',
+    description: '收藏你的灵感与思考',
+    emoji: '🌙',
+    color: '#e6d4a0',
+    createdAt: '2026-06-14T00:00:00.000Z',
+    orbitAngle: 0,
+  },
+];
+
 /**
  * 自愈清理：移除 memories 中的"孤儿关注"关系
  * 即 user↔agent 间的 label==='关注' 记录，但该 agent 已不在 friends 列表中。
@@ -122,7 +148,7 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   // 用户创建的星球（灰白月球天体，环绕 user 节点）
   // [{ id, name, description, emoji, color, createdAt, orbitAngle }]
-  userPlanets: loadFromStorage('userPlanets', []),
+  userPlanets: loadFromStorage('userPlanets', DEFAULT_USER_PLANETS),
   // 星球内容流：{ [planetId]: [{ id, text, source:'manual'|'agent', authorName, authorAvatar, time, createdAt }] }
   planetPosts: loadFromStorage('planetPosts', {}),
   // 当前正在查看的星球 ID（null = 列表页）
@@ -155,7 +181,7 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   // 单个对象（业务限制：每用户仅 1 个）
   // { name, avatar(emoji), bio, style, replyMode: 'template'|'llm'|'knowledge', imaConfig?: {clientId, apiKey} }
-  customClone: loadFromStorage('customClone', null),
+  customClone: loadFromStorage('customClone', DEFAULT_CUSTOM_CLONE),
   // 创建/编辑表单显隐
   cloneCreatorOpen: false,
 
@@ -166,11 +192,12 @@ const useNebulaStore = create((set, get) => ({
   demoHighlight: null,
   demoSubtitle: '',
   demoPhase: 0,
-  narrationEnabled: false,
+  narrationEnabled: true,
   runDemo: null,
   stopDemo: null,
   demoShowPhone: false,
   demoShowDeliberation: false,
+  demoShowTemporal: false,
 
   // ========================================
   // 新手引导
@@ -261,8 +288,8 @@ const useNebulaStore = create((set, get) => ({
     saveToStorage('momentsMode', mode);
   },
 
-  loginUser: (name, avatar) => {
-    const profile = { name, avatar };
+  loginUser: (name, avatar, bio) => {
+    const profile = { name, avatar, bio: bio || '' };
     set({ userProfile: profile });
     saveToStorage('profile', profile);
   },
@@ -740,6 +767,7 @@ const useNebulaStore = create((set, get) => ({
   toggleNarration: () => set((s) => ({ narrationEnabled: !s.narrationEnabled })),
   setDemoShowPhone: (v) => set({ demoShowPhone: v }),
   setDemoShowDeliberation: (v) => set({ demoShowDeliberation: v }),
+  setDemoShowTemporal: (v) => set({ demoShowTemporal: v }),
 
   // ========================================
   // Actions: 新手引导
@@ -777,6 +805,19 @@ const useNebulaStore = create((set, get) => ({
     } catch (e) {
       console.warn('截图失败:', e);
     }
+  },
+
+  // ========================================
+  // Actions: 一键初始化
+  // ========================================
+  // 清空所有 foldneb_* 用户数据（朋友圈/关注/记忆/星球/分身/推演历史/新手引导等），
+  // 回到最开始的全新状态，然后刷新页面让所有初始加载逻辑重新跑一遍。
+  resetAll: () => {
+    try {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith('foldneb_'));
+      keys.forEach((k) => localStorage.removeItem(k));
+    } catch {}
+    window.location.reload();
   },
 
   // ========================================

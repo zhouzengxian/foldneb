@@ -3,7 +3,7 @@ import ArchiveLeftCol from './ArchiveLeftCol.jsx';
 import ArchiveRightCol from './ArchiveRightCol.jsx';
 
 /**
- * 网页档案 Modal（评委友好，不依赖本地 Obsidian）
+ * 网页档案 Modal（不依赖本地 Obsidian，在线即可查看）
  * 外壳：overlay + 关闭按钮 + 头像标题 + 两栏容器
  * 左栏：思想者完整资料（ArchiveLeftCol）
  * 右栏：Skill 管理 + 深度分析生成（ArchiveRightCol）

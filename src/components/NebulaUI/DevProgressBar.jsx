@@ -1,16 +1,15 @@
-export default function DevProgressBar() {
+export default function DevProgressBar({ runDemo }) {
   return (
-    <div className="dev-progress-bar">
+    <div className="dev-progress-bar" onClick={runDemo} style={{ cursor: 'pointer' }}>
       <div className="dot-track">
         {Array.from({ length: 10 }).map((_, i) => (
           <span
             key={i}
-            className={`dot${i < 9 ? ' on' : ''}${i === 8 ? ' head' : ''}`}
+            className={`dot${i < 10 ? ' on' : ''}${i === 9 ? ' head' : ''}`}
           />
         ))}
       </div>
-      <div className="dev-label">开发进度</div>
-      <div className="pixel-text">90%</div>
+      <div><span className="dev-label" style={{ color: '#ffd700' }}>播放</span><span className="pixel-text" style={{ fontSize: 14, lineHeight: 1.4, verticalAlign: 'middle' }}>demo</span></div>
     </div>
   );
 }

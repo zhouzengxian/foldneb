@@ -2,12 +2,11 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import useNebulaStore from '../store/useNebulaStore';
 import {
   generateFutureSelves, writeLetterToPast, crossTimelineReview, buildAnchorMatrix,
-  setTemporalProvider, getTemporalProvider,
   getFallbackSelves, getFallbackLetter, getFallbackCrossReview, getFallbackMatrix,
 } from '../utils/temporalEngine';
 import { compareForks, generateCompareReport, demoCompareForks, demoGenerateCompareReport } from '../utils/forkEngine';
 import { traceAllAnchors } from '../utils/causalTrace';
-import { MODEL_PROVIDERS, hasValidKey } from '../utils/modelConfig';
+import { MODEL_PROVIDERS, hasValidKey, getUnifiedProvider, setUnifiedProvider } from '../utils/modelConfig';
 import ApiSettingsPanel from './ApiSettingsPanel';
 import {
   IdleForm, RunningView, LetterCard, CrossReviewCard, AnchorCard,
@@ -56,7 +55,7 @@ export default function TemporalDeliberation() {
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
   const [mode, setMode] = useState('demo'); // 'api' | 'demo'（默认 demo，使用频率更高）
-  const [modelProvider, setModelProviderLocal] = useState(() => getTemporalProvider());
+  const [modelProvider, setModelProviderLocal] = useState(() => getUnifiedProvider());
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [credsTick, setCredsTick] = useState(0); // 保存后刷新 hasValidKey 缓存判断
   const abortRef = useRef(false);
@@ -134,7 +133,7 @@ export default function TemporalDeliberation() {
 
   const updateField = (k, v) => setProfile(p => ({ ...p, [k]: v }));
   const handleModelChange = (id) => {
-    setModelProviderLocal(id); setTemporalProvider(id);
+    setModelProviderLocal(id); setUnifiedProvider(id);
     setShowApiSettings(!hasValidKey(id));
   };
   // 凭据保存后：刷新本地缓存，Key 已配置则关闭面板
@@ -156,7 +155,7 @@ export default function TemporalDeliberation() {
       setError('当前模型未配置 API Key，请点击顶部 ⚙️ 按钮配置（或切换 🎬 Demo 模式）'); return;
     }
     setError(null); setLogs([]); abortRef.current = false;
-    setTemporalProvider(modelProvider);
+    setUnifiedProvider(modelProvider);
 
     // 触发时间线隧道动画（V4.7 视觉叙事增强，4 秒）
     setTunnelActive(true);
@@ -669,7 +668,7 @@ function ForkCompareSection({ profile, mode, autoDemoTrigger = 0 }) {
     const alts = raw.split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
     if (alts.length < 1) { setError('请至少输入一条替代路径'); return; }
     // Demo 模式不检查 API Key
-    if (mode !== 'demo' && !hasValidKey(getTemporalProvider())) {
+    if (mode !== 'demo' && !hasValidKey(getUnifiedProvider())) {
       setError('未配置 API Key，请切换到 🎬 Demo 模式查看演示'); return;
     }
     setError(null); setLoading(true);

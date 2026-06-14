@@ -3,10 +3,10 @@ import useNebulaStore from '../../store/useNebulaStore';
 import { agentMoments, getTodayPosts } from '../../data/agentMoments';
 import { tier1Agents } from '../../data/gameData';
 import {
-  isLLMAgent, setMomentsProvider,
+  isLLMAgent,
   isMomentsApiReady, getMomentsProvider,
 } from '../../utils/agentReplyEngine';
-import { MODEL_PROVIDERS, hasValidKey, DEFAULT_PROVIDER_ID } from '../../utils/modelConfig';
+import { MODEL_PROVIDERS, hasValidKey, DEFAULT_PROVIDER_ID, setUnifiedProvider } from '../../utils/modelConfig';
 import ApiSettingsPanel from '../ApiSettingsPanel';
 import { UserPostCard, AgentDetailScreen, UserMomentsScreen, ComposePost } from '../MomentsExtras';
 import { VipBadge, ModeToggle, LoginPrompt, EmptyMoments } from './widgets';
@@ -35,7 +35,7 @@ export default function MomentsScreen() {
     if (!hasValidKey(current)) {
       const withKey = MODEL_PROVIDERS.find(p => hasValidKey(p.id));
       const chosen = withKey?.id || DEFAULT_PROVIDER_ID;
-      setMomentsProvider(chosen);
+      setUnifiedProvider(chosen);
       setApiProvider(chosen);
     } else {
       setApiProvider(current);
@@ -189,7 +189,7 @@ export default function MomentsScreen() {
       {showApiSettings && (
         <ApiSettingsOverlay
           provider={apiProvider}
-          onProviderChange={(id) => { setMomentsProvider(id); setApiProvider(id); }}
+          onProviderChange={(id) => { setUnifiedProvider(id); setApiProvider(id); }}
           onClose={() => setShowApiSettings(false)}
         />
       )}

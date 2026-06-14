@@ -1,4 +1,7 @@
+import { useEffect, useRef } from 'react';
 import useNebulaStore from '../../store/useNebulaStore.js';
+import { createDemoMusic } from '../../utils/demoMusic.js';
+import { PhoneMock, DeliberationMock, TemporalMock } from './DemoScreenshots.jsx';
 
 export default function DemoOverlay() {
   const demoActive = useNebulaStore((s) => s.demoActive);
@@ -6,14 +9,27 @@ export default function DemoOverlay() {
   const demoPhase = useNebulaStore((s) => s.demoPhase);
   const demoShowPhone = useNebulaStore((s) => s.demoShowPhone);
   const demoShowDeliberation = useNebulaStore((s) => s.demoShowDeliberation);
+  const demoShowTemporal = useNebulaStore((s) => s.demoShowTemporal);
   const stopDemo = useNebulaStore((s) => s.stopDemo);
+
+  // ── 电子配乐：巡游启动时播放，结束时停止 ──
+  const musicRef = useRef(null);
+  useEffect(() => {
+    if (!demoActive) return;
+    const music = createDemoMusic();
+    musicRef.current = music;
+    return () => {
+      music?.stop();
+      musicRef.current = null;
+    };
+  }, [demoActive]);
 
   if (!demoActive) return null;
 
   return (
     <>
-      {/* 跳过巡游按钮 */}
-      <div style={{ position: 'absolute', top: 20, right: 24, zIndex: 100 }}>
+      {/* 跳过巡游按钮 —— 必须 pointerEvents:'auto'，父容器 NebulaUI 是 'none' */}
+      <div style={{ position: 'absolute', top: 20, left: 24, zIndex: 200, pointerEvents: 'auto' }}>
         <button
           onClick={() => stopDemo?.()}
           style={{
@@ -71,12 +87,12 @@ export default function DemoOverlay() {
           height: '100%',
           background: 'linear-gradient(90deg, #FFD700, #FFAA44, #FFD700)',
           boxShadow: '0 0 8px rgba(255,215,0,0.6)',
-          animation: 'demoProgress 45s linear forwards',
+          animation: 'demoProgress 60s linear forwards',
         }} />
       </div>
 
-      {/* Phase 5: Logo 收尾大字幕 */}
-      {demoPhase === 5 && (
+      {/* Phase 8: Logo 收尾大字幕 */}
+      {demoPhase === 8 && (
         <div style={{
           position: 'absolute', top: '38%', left: '50%',
           transform: 'translate(-50%, -50%)',
@@ -95,64 +111,19 @@ export default function DemoOverlay() {
             letterSpacing: '0.3em', marginTop: 12,
             textShadow: '0 2px 8px rgba(0,0,0,0.8)',
           }}>
-            为思考者建造会生长的思想星河
+            思想家推演引擎 · 会动态生长的星河
           </div>
         </div>
       )}
 
-      {/* Demo 朋友圈闪现提示 */}
-      {demoShowPhone && (
-        <div style={{
-          position: 'absolute', top: '20%', right: '15%',
-          pointerEvents: 'none',
-          animation: 'phoneFlash 1.8s ease-in-out forwards',
-        }}>
-          <div style={{
-            textAlign: 'center',
-            padding: '20px 30px',
-            background: 'rgba(5,5,20,0.85)',
-            backdropFilter: 'blur(16px)',
-            borderRadius: 16,
-            border: '2px solid rgba(255,215,0,0.3)',
-            boxShadow: '0 0 40px rgba(255,215,0,0.15)',
-          }}>
-            <div style={{ fontSize: 36, marginBottom: 8 }}>📱</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#FFD700', letterSpacing: '0.05em' }}>
-              思想者朋友圈
-            </div>
-            <div style={{ fontSize: 11, color: '#8899bb', marginTop: 4 }}>
-              点赞 · 评论 · 自动回复
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 截图1：思想者朋友圈（HTML 模拟手机 feed）*/}
+      {demoShowPhone && <PhoneMock />}
 
-      {/* Demo 决策推演闪现提示 */}
-      {demoShowDeliberation && (
-        <div style={{
-          position: 'absolute', top: '20%', left: '15%',
-          pointerEvents: 'none',
-          animation: 'phoneFlash 1.8s ease-in-out forwards',
-        }}>
-          <div style={{
-            textAlign: 'center',
-            padding: '20px 30px',
-            background: 'rgba(5,5,20,0.85)',
-            backdropFilter: 'blur(16px)',
-            borderRadius: 16,
-            border: '2px solid rgba(100,180,255,0.3)',
-            boxShadow: '0 0 40px rgba(100,180,255,0.15)',
-          }}>
-            <div style={{ fontSize: 36, marginBottom: 8 }}>🧠</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#88bbff', letterSpacing: '0.05em' }}>
-              多Agent决策推演
-            </div>
-            <div style={{ fontSize: 11, color: '#8899bb', marginTop: 4 }}>
-              智囊团 · 多轮辩论 · 结构化报告
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 截图2：决策推演圆桌（HTML 模拟辩论面板）*/}
+      {demoShowDeliberation && <DeliberationMock />}
+
+      {/* 截图3：时间折叠推演（HTML 模拟时间轴 + 分叉）*/}
+      {demoShowTemporal && <TemporalMock />}
     </>
   );
 }

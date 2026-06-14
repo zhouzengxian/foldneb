@@ -18,11 +18,11 @@ function createMoonTexture(seed = 0) {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  // 基础灰白色底
+  // 基础淡黄白底（暖色调，保留漫反射立体感）
   const baseGrad = ctx.createLinearGradient(0, 0, size, size);
-  baseGrad.addColorStop(0, '#d8d8de');
-  baseGrad.addColorStop(0.5, '#c0c0c8');
-  baseGrad.addColorStop(1, '#a8a8b0');
+  baseGrad.addColorStop(0, '#efe6c8');
+  baseGrad.addColorStop(0.5, '#ddd0a8');
+  baseGrad.addColorStop(1, '#c4b488');
   ctx.fillStyle = baseGrad;
   ctx.fillRect(0, 0, size, size);
 
@@ -116,11 +116,11 @@ function MoonNode({ planet, index, getPhysPos, onSelect, isFocused }) {
     const [px, py, pz] = getPhysPos('user');
     if (isNaN(px)) return;
 
-    // 月球在 user 周围的位置（动态公转，统一轨道平面 y=py+1.2）
+    // 月球在 user 周围的位置（动态公转，轨道平面与探索者中心同高 y=py，确保围绕中心而非浮在上方）
     const angle = baseAngle + state.clock.elapsedTime * orbitSpeed;
     const x = px + Math.cos(angle) * orbitRadius;
     const z = pz + Math.sin(angle) * orbitRadius;
-    const y = py + 1.2;
+    const y = py;
     groupRef.current.position.set(x, y, z);
 
     // 自转
@@ -144,16 +144,16 @@ function MoonNode({ planet, index, getPhysPos, onSelect, isFocused }) {
       onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
       onPointerOut={() => { document.body.style.cursor = 'default'; }}
     >
-      {/* 月球本体：默认不发光，被聚焦时点亮柔光让用户一定能看到 */}
+      {/* 月球本体：淡黄漫反射底色 + 低强度暖色自发光保证最低可见度（场景光不足时仍能看到立体球面） */}
       <mesh ref={moonRef} castShadow receiveShadow>
         <sphereGeometry args={[0.45, 48, 48]} />
         <meshStandardMaterial
           map={texture}
-          color={isFocused ? '#ffffff' : '#dcdce2'}
-          roughness={0.95}
+          color={isFocused ? '#fff6d8' : '#e6d4a0'}
+          roughness={0.92}
           metalness={0.0}
-          emissive={isFocused ? '#b8d4ff' : '#000000'}
-          emissiveIntensity={isFocused ? 0.5 : 0}
+          emissive={isFocused ? '#ffd98a' : '#7a6234'}
+          emissiveIntensity={isFocused ? 0.55 : 0.12}
         />
       </mesh>
 
@@ -207,7 +207,7 @@ export function calcMoonWorldPos(getPos, userPlanets, planetId, time = 0) {
   const angle = baseAngle + time * moonOrbitSpeed(index);
   const x = px + Math.cos(angle) * orbitRadius;
   const z = pz + Math.sin(angle) * orbitRadius;
-  const y = py + 1.2;
+  const y = py;
   return [x, y, z];
 }
 
@@ -225,8 +225,8 @@ function OrbitRings({ userPlanets, getPhysPos }) {
     if (!groupRef.current) return;
     const [px, py, pz] = getPhysPos('user');
     if (isNaN(px)) return;
-    // 轨道平面与月球一致（y = py + 1.2）
-    groupRef.current.position.set(px, py + 1.2, pz);
+    // 轨道平面与月球一致（y = py，与探索者同高）
+    groupRef.current.position.set(px, py, pz);
   });
 
   return (

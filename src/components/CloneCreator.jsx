@@ -7,6 +7,8 @@ import {
   hasImaCreds,
   testImaConnection,
 } from '../utils/imaClient.js';
+import { hasValidKey, getUnifiedProvider } from '../utils/modelConfig.js';
+import ApiSettingsPanel from './ApiSettingsPanel.jsx';
 
 /**
  * 自定义分身 Agent 创建/编辑表单
@@ -42,6 +44,7 @@ export default function CloneCreator() {
   const [imaForm, setImaForm] = useState({ clientId: '', apiKey: '', kbIds: '' });
   const [imaTesting, setImaTesting] = useState(false);
   const [imaTestResult, setImaTestResult] = useState(null);
+  const [showApiConfig, setShowApiConfig] = useState(false);
 
   // 打开时同步已有数据
   useEffect(() => {
@@ -393,6 +396,42 @@ export default function CloneCreator() {
             ))}
           </div>
         </div>
+
+        {/* API 配置（AI 模式 / 知识库模式，复用决策推演同一面板） */}
+        {(form.replyMode === 'llm' || form.replyMode === 'knowledge') && !hasValidKey(getUnifiedProvider()) && (
+          <div
+            style={{
+              marginBottom: 20,
+              padding: 14,
+              background: 'rgba(255,215,0,0.05)',
+              borderRadius: 10,
+              border: '1px solid rgba(255,215,0,0.2)',
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#FFD700', marginBottom: 4 }}>
+              ⚙️ API Key 未配置
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(200,180,140,0.65)', marginBottom: 10, lineHeight: 1.5 }}>
+              AI 模式需要配置大模型 API Key。与决策推演共享同一份凭据，配一次全平台可用。
+            </div>
+            <button
+              onClick={() => setShowApiConfig(!showApiConfig)}
+              style={{
+                padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,180,0,0.1))',
+                border: '1px solid rgba(255,215,0,0.35)',
+                color: '#FFD700', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+              }}
+            >
+              {showApiConfig ? '收起配置' : '⚙️ 配置 API Key'}
+            </button>
+            {showApiConfig && (
+              <div style={{ marginTop: 10 }}>
+                <ApiSettingsPanel provider={getUnifiedProvider()} onSaved={() => setShowApiConfig(false)} />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ima 知识库配置（仅 knowledge 模式显示） */}
         {form.replyMode === 'knowledge' && (

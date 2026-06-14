@@ -5,20 +5,14 @@
 
 import { tier1Agents } from '../data/gameData';
 import { resolveAgentId } from './memoryCrystal';
-import { callLLMWithProvider, DEFAULT_PROVIDER_ID, getProviderById, LLMUnavailableError, getApiErrorMessage } from './modelConfig';
+import { callLLMWithProvider, DEFAULT_PROVIDER_ID, getProviderById, LLMUnavailableError, getApiErrorMessage, getUnifiedProvider, setUnifiedProvider } from './modelConfig';
 
 // ============================================================
-// 当前使用的模型（由 UI 设置）
+// 统一 Provider（全局共享，持久化 localStorage）
+// 保留别名兼容旧导入，实际读写统一走 modelConfig
 // ============================================================
-let currentProviderId = DEFAULT_PROVIDER_ID;
-
-export function setDeliberationProvider(providerId) {
-  currentProviderId = providerId || DEFAULT_PROVIDER_ID;
-}
-
-export function getDeliberationProvider() {
-  return currentProviderId;
-}
+export const setDeliberationProvider = setUnifiedProvider;
+export const getDeliberationProvider = getUnifiedProvider;
 
 // ============================================================
 // Agent 专长域 (供 engine 选择候选Agent)
@@ -113,7 +107,7 @@ function getAgentInfo(id) {
 // LLM 调用封装
 // ============================================================
 async function callLLM(systemPrompt, userPrompt, temperature = 0.7) {
-  return callLLMWithProvider(currentProviderId, systemPrompt, userPrompt, {
+  return callLLMWithProvider(getUnifiedProvider(), systemPrompt, userPrompt, {
     temperature, maxTokens: 800, timeoutMs: 20000,
   });
 }

@@ -24,6 +24,23 @@ export default function DebugPanel({ totalMemories, open, onClose }) {
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>✕</button>
       </div>
 
+      {/* 一键初始化：清空全部数据，回到最开始状态 */}
+      <button
+        onClick={() => {
+          if (window.confirm('⚠️ 确定一键初始化？\n\n将清空所有用户数据：\n• 朋友圈登录 / 关注 / 点赞 / 评论\n• 用户发布的动态及 agent 反应\n• 知识星球\n• 自定义分身\n• 决策推演 / 时间折叠历史\n• 新手引导（会重新出现）\n\n此操作不可撤销，清空后页面会刷新。')) {
+            useNebulaStore.getState().resetAll();
+          }
+        }}
+        style={{
+          padding: '10px 20px', borderRadius: 8,
+          background: 'linear-gradient(135deg, rgba(255,160,60,0.3), rgba(255,160,60,0.1))',
+          border: '1px solid rgba(255,160,60,0.5)',
+          color: '#FFB840', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          fontFamily: 'inherit', letterSpacing: '0.05em', transition: 'all 0.2s',
+          width: '100%', marginBottom: 12,
+        }}
+      >🧹 一键初始化（清空全部数据）</button>
+
       {/* 批量取消关注 */}
       <button
         onClick={() => {

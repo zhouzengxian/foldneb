@@ -19,14 +19,28 @@ export default function PhoneApp() {
   const phoneOpen = useNebulaStore((s) => s.phoneOpen);
   const phoneScreen = useNebulaStore((s) => s.phoneScreen);
   const togglePhone = useNebulaStore((s) => s.togglePhone);
+  const openPhone = useNebulaStore((s) => s.openPhone);
   const closePhone = useNebulaStore((s) => s.closePhone);
   const setPhoneScreen = useNebulaStore((s) => s.setPhoneScreen);
   const currentPlanetId = useNebulaStore((s) => s.currentPlanetId);
+  const userProfile = useNebulaStore((s) => s.userProfile);
+
+  // 是否仍处于默认身份（未自定义过名字）→ 点击朋友圈直接引导去创建/修改身份
+  const isDefaultIdentity = !userProfile || (userProfile.name === '探索者' && userProfile.avatar === '🌟');
+
+  const handleToggle = () => {
+    if (isDefaultIdentity) {
+      // 默认身份：打开手机并直达「我」页修改名字，创建自己的身份
+      openPhone('profile');
+      return;
+    }
+    togglePhone();
+  };
 
   // 竖排收缩按钮
   if (!phoneOpen) {
     return (
-      <div onClick={togglePhone}
+      <div onClick={handleToggle}
         style={{
           position: 'fixed', right: 0, top: '50%', transform: 'translateY(-50%)',
           zIndex: 60, borderRadius: '14px 0 0 14px',

@@ -2,10 +2,8 @@ import { useState } from 'react';
 import ApiSettingsPanel from '../ApiSettingsPanel.jsx';
 import {
   generateBusinessAnalysis,
-  getArchiveProvider,
-  setArchiveProvider,
 } from '../../utils/analysisApi.js';
-import { hasValidKey, getEffectiveConfig, MODEL_PROVIDERS } from '../../utils/modelConfig.js';
+import { hasValidKey, getEffectiveConfig, MODEL_PROVIDERS, getUnifiedProvider, setUnifiedProvider } from '../../utils/modelConfig.js';
 import { getActiveSkill } from '../../utils/analysisPrompt.js';
 import SkillManagerPanel from './SkillManagerPanel.jsx';
 import AnalysisContent from './AnalysisContent.jsx';
@@ -19,7 +17,7 @@ export default function ArchiveRightCol({ agent }) {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const [showApiConfig, setShowApiConfig] = useState(false);
-  const [archiveProvider, setArchiveProviderState] = useState(getArchiveProvider());
+  const [archiveProvider, setArchiveProviderState] = useState(getUnifiedProvider());
   const [expandedHistory, setExpandedHistory] = useState({});
   const [activeSkill, setActiveSkill] = useState(getActiveSkill());
 
@@ -57,7 +55,7 @@ export default function ArchiveRightCol({ agent }) {
 
   const handleCredsSaved = (pid) => {
     setArchiveProviderState(pid);
-    setArchiveProvider(pid);
+    setUnifiedProvider(pid);
     if (hasValidKey(pid)) {
       setShowApiConfig(false);
       setAnalysisError('');

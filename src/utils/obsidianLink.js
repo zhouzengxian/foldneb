@@ -103,7 +103,7 @@ function sanitizeFileName(name) {
 
 /**
  * 异步尝试打开 Obsidian，通过 visibilitychange 判定是否真的切换到了 Obsidian app。
- * 用于在线 Demo 环境：评委若没装 Obsidian，1.5s 内不会发生页面隐藏 → 触发 fallback。
+ * 用于在线 Demo 环境：用户若没装 Obsidian，1.5s 内不会发生页面隐藏 → 触发 fallback。
  *
  * @param {Object} agent
  * @param {Object} handlers - { onSuccess(), onFallback() }

@@ -43,6 +43,29 @@ export const MODEL_PROVIDERS = [
 
 export const DEFAULT_PROVIDER_ID = 'zhipu';
 
+// ===== 统一 Provider 存取器（所有引擎共享同一份 Provider 选择，持久化到 localStorage）=====
+const UNIFIED_PROVIDER_KEY = 'foldneb_unified_provider';
+
+/**
+ * 获取全局统一的 Provider（决策推演 / 时间折叠 / 朋友圈 / 分身聊天 / 档案分析 共用）
+ * 持久化到 localStorage，页面刷新不丢失
+ */
+export function getUnifiedProvider() {
+  try {
+    return localStorage.getItem(UNIFIED_PROVIDER_KEY) || DEFAULT_PROVIDER_ID;
+  } catch {
+    return DEFAULT_PROVIDER_ID;
+  }
+}
+
+/**
+ * 设置全局统一的 Provider
+ * 所有引擎自动同步——一次切换，全平台生效
+ */
+export function setUnifiedProvider(providerId) {
+  try { localStorage.setItem(UNIFIED_PROVIDER_KEY, providerId || DEFAULT_PROVIDER_ID); } catch {}
+}
+
 // ===== CORS 代理配置 =====
 // 浏览器直接请求外部 API 会触发 CORS 拦截（尤其在 GitHub Pages 静态托管下）
 // 可选代理：

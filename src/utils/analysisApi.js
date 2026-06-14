@@ -1,26 +1,15 @@
 // ============================================================
 // 商业动态逻辑深度分析 · 大模型调用 + Markdown 渲染
 // ============================================================
-// API 配置复用 modelConfig.js 的 Provider 机制（与决策推演共享）
+// API 配置复用 modelConfig.js 的统一 Provider 机制（全平台共享）
 // ============================================================
 
-import { getEffectiveConfig, getCorsProxyUrl, DEFAULT_PROVIDER_ID } from './modelConfig.js';
+import { getEffectiveConfig, getCorsProxyUrl, getUnifiedProvider, setUnifiedProvider } from './modelConfig.js';
 
-const ARCHIVE_PROVIDER_KEY = 'foldneb_archive_provider';
-
-/** 档案使用的 provider（默认智谱，与决策推演共享密钥） */
-export function getArchiveProvider() {
-  try {
-    return localStorage.getItem(ARCHIVE_PROVIDER_KEY) || DEFAULT_PROVIDER_ID;
-  } catch {
-    return DEFAULT_PROVIDER_ID;
-  }
-}
-
-/** 设置档案使用的 provider */
-export function setArchiveProvider(providerId) {
-  try { localStorage.setItem(ARCHIVE_PROVIDER_KEY, providerId); } catch {}
-}
+// 统一 Provider（全局共享，持久化 localStorage）
+// 保留别名兼容旧导入
+export const getArchiveProvider = getUnifiedProvider;
+export const setArchiveProvider = setUnifiedProvider;
 
 /**
  * 调用大模型生成「商业动态逻辑深度分析」

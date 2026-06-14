@@ -3,9 +3,8 @@ import useNebulaStore from '../store/useNebulaStore';
 import {
   analyzeProblem, planRounds, getAgentResponse, getAgentResponsesBatch,
   extractInsights, generateReport, getAgentInfo,
-  setDeliberationProvider, getDeliberationProvider,
 } from '../utils/deliberationEngine';
-import { MODEL_PROVIDERS, hasValidKey, getUserCreds, getProviderModels, getLastApiError } from '../utils/modelConfig';
+import { MODEL_PROVIDERS, hasValidKey, getUserCreds, getProviderModels, getLastApiError, setUnifiedProvider, getUnifiedProvider } from '../utils/modelConfig';
 import ApiSettingsPanel from './ApiSettingsPanel';
 import DeliberationGraph from './DeliberationGraph';
 import DeliberationHistory from './DeliberationHistory';
@@ -98,7 +97,7 @@ export default function DeliberationUI() {
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
   const [mode, setMode] = useState('demo'); // 'api' | 'demo'（默认 demo，开箱即用）
-  const [modelProvider, setModelProviderLocal] = useState(() => getDeliberationProvider());
+  const [modelProvider, setModelProviderLocal] = useState(() => getUnifiedProvider());
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [modelInput, setModelInput] = useState('');
@@ -160,7 +159,7 @@ export default function DeliberationUI() {
   // 切换模型：同步到引擎；缺少 key 自动弹出配置面板
   const handleModelChange = (id) => {
     setModelProviderLocal(id);
-    setDeliberationProvider(id);
+    setUnifiedProvider(id);
     setShowApiSettings(!hasValidKey(id));
   };
 

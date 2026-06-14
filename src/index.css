@@ -19,7 +19,8 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -36,7 +37,7 @@
 }
 
 .dev-progress-bar .dev-label {
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.12em;
   color: #64ffb4;
   font-weight: 500;
@@ -46,7 +47,7 @@
 
 .dev-progress-bar .pixel-text {
   font-family: 'Press Start 2P', 'Courier New', monospace;
-  font-size: 16px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   color: #ffd700;
   text-shadow:

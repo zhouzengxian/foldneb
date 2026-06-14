@@ -11,7 +11,7 @@ import useNebulaStore from '../store/useNebulaStore.js';
 // Utils
 import { processDialogue } from '../utils/memoryCrystal.js';
 // Audio
-import { playConvergeWhoosh, playDing, playWhoosh, startAmbient, stopAmbient, initAudio } from '../utils/audio.js';
+import { playDing, playWhoosh, startAmbient, stopAmbient, initAudio } from '../utils/audio.js';
 // Hooks
 import { useForceGraph } from '../hooks/useForceGraph.js';
 // Space Elements
@@ -175,7 +175,7 @@ function UserNode({ getPhysPos }) {
           {emoji} {name}
         </Text>
         <Text position={[0, -0.22, 0]} fontSize={0.1} color="#aabbcc" anchorX="center" anchorY="middle" outlineWidth={0.02} outlineColor="#000000">
-          你的分身
+          你的本体
         </Text>
       </Billboard>
     </group>
@@ -443,6 +443,7 @@ function NebulaContent() {
   // Demo 飞行
   const originCamRef = useRef(null);
   const demoTimelineRef = useRef(null);
+  const narrationAudioRef = useRef(null);
   const { camera } = useThree();
   const cameraRef = useRef(camera);
 
@@ -464,20 +465,45 @@ function NebulaContent() {
     const jensen = tier1Agents.find(a => a.id === 'jensen_huang') || tier1Agents[0];
     const wangym = tier1Agents.find(a => a.id === 'wangyangming') || tier1Agents[60];
 
-    // ===== 语音旁白（浏览器内置 TTS）=====
-    const speakNarration = (text) => {
+    // ===== 语音旁白（三层回退：预录音 → 浏览器Neural语音 → 普通语音）=====
+    // 层2/3：浏览器 TTS，优先选 Neural/Online 自然语音
+    const speakWithTTS = (text) => {
       if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel(); // 停止上一段
-      if (!S.narrationEnabled || !text) return;
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'zh-CN';
       u.rate = 0.95;
       u.pitch = 1.0;
-      // 尝试选中文语音
       const voices = window.speechSynthesis.getVoices();
-      const zhVoice = voices.find(v => v.lang === 'zh-CN' || v.lang === 'zh_CN');
+      const neural = voices.find(v =>
+        (v.lang === 'zh-CN' || v.lang === 'zh_CN') &&
+        /neural|natural|online/i.test(v.name)
+      );
+      const zhVoice = neural || voices.find(v => v.lang === 'zh-CN' || v.lang === 'zh_CN');
       if (zhVoice) u.voice = zhVoice;
       window.speechSynthesis.speak(u);
+    };
+
+    const speakNarration = (text, phase) => {
+      // 停止上一段（音频 + TTS）
+      const prev = narrationAudioRef.current;
+      if (prev) { prev.pause(); prev.src = ''; narrationAudioRef.current = null; }
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (!S.narrationEnabled || !text) return;
+
+      // 层1：预录制神经网络语音（晓晓，最高质量，离线可播）
+      if (phase) {
+        const base = import.meta.env.BASE_URL;
+        const audio = new Audio(`${base}narration/narration-${phase}.mp3`);
+        audio.volume = 1.0;
+        narrationAudioRef.current = audio;
+        audio.play().catch(() => {
+          // 加载/播放失败 → 回退浏览器 TTS
+          narrationAudioRef.current = null;
+          speakWithTTS(text);
+        });
+        return;
+      }
+      speakWithTTS(text);
     };
 
     // 音效统一受 narrationEnabled 控制：不朗读时静音
@@ -485,6 +511,8 @@ function NebulaContent() {
 
     const tl = gsap.timeline({
       onComplete: () => {
+        const prev = narrationAudioRef.current;
+        if (prev) { prev.pause(); narrationAudioRef.current = null; }
         window.speechSynthesis?.cancel();
         stopAmbient();
         S.setDemoActive(false);
@@ -493,6 +521,7 @@ function NebulaContent() {
         S.setDemoPhase(0);
         S.setDemoShowPhone(false);
         S.setDemoShowDeliberation(false);
+        S.setDemoShowTemporal(false);
         S.clearFocus();
         demoTimelineRef.current = null;
       },
@@ -504,10 +533,9 @@ function NebulaContent() {
       onStart: () => {
         S.setDemoPhase(1);
         S.setDemoHighlight(null);
-        S.setDemoSubtitle('如果改变世界的 125 个大脑，都在同一片天空……');
-        speakNarration('如果改变世界的 125 个大脑，都在同一片天空……');
-        // 粒子聚合音效 + 环境音启动（受 narrationEnabled 控制）
-        playSfx(playConvergeWhoosh);
+        S.setDemoSubtitle('如果人类群星闪耀，都在同一片天空。');
+        speakNarration('如果人类群星闪耀，都在同一片天空。', 1);
+        // 环境音启动（受 narrationEnabled 控制）
         playSfx(initAudio);
         playSfx(() => setTimeout(startAmbient, 500));
       },
@@ -518,8 +546,8 @@ function NebulaContent() {
     tl.to(cam.position, { x: 0, y: 35, z: 50, duration: 3, ease: 'power2.inOut',
       onStart: () => {
         S.setDemoPhase(2);
-        S.setDemoSubtitle('AI前沿、认知决策、思想源流——黄仁勋、马斯克、王阳明、老子——跨越千年的思想者，化为发光星体');
-        speakNarration('AI前沿、认知决策、思想源流。黄仁勋、马斯克、王阳明、老子，跨越千年的思想者，化为发光星体');
+        S.setDemoSubtitle('AI前沿、认知决策——黄仁勋、马斯克、庄子，跨越千年的思想者化为发光星体。');
+        speakNarration('AI前沿、认知决策——黄仁勋、马斯克、庄子，跨越千年的思想者化为发光星体。', 2);
         playSfx(playWhoosh);
       },
     });
@@ -540,13 +568,13 @@ function NebulaContent() {
         S.setDemoPhase(3);
         S.setDemoHighlight(jensen.id);
         focusAgent(jensen.id);
-        S.setDemoSubtitle('轻触任何一颗星，就能听到他们的思想。搜索、定位、对话——知识活了');
-        speakNarration('轻触任何一颗星，就能听到他们的思想。搜索、定位、对话，知识活了');
+        S.setDemoSubtitle('轻触一颗星，就能和他对话。回答会沉淀成记忆，下次还记得你。');
+        speakNarration('轻触一颗星，就能和他对话。回答会沉淀成记忆，下次还记得你。', 3);
         playSfx(playDing);
         setTimeout(() => S.showDialogueBubble(jensen.id), 2200);
       },
     });
-    tl.to({}, { duration: 1.5 }); // 停留看语录
+    tl.to({}, { duration: 2.5 }); // 停留看语录
 
     // 飞向王阳明
     tl.to(cam.position, {
@@ -560,27 +588,27 @@ function NebulaContent() {
         setTimeout(() => S.showDialogueBubble(wangym.id), 2200);
       },
     });
-    tl.to({}, { duration: 1.5 }); // 停留看语录
+    tl.to({}, { duration: 2.5 }); // 停留看语录
 
-    // ===== Phase 3.5: 朋友圈闪现 (27-29s) =====
+    // ===== Phase 4: 朋友圈闪现 (27-32s，5s 配合台词) =====
     tl.to({}, {
-      duration: 2,
+      duration: 5,
       onStart: () => {
-        S.setDemoSubtitle('思想者还有朋友圈——点赞、评论、自动回复，社交化Agent互动');
-        speakNarration('思想者还有朋友圈。点赞、评论、自动回复，社交化Agent互动');
+        S.setDemoSubtitle('他们还会发朋友圈，自动回复你。');
+        speakNarration('他们还会发朋友圈，自动回复你。', 4);
         S.setDemoShowPhone(true);
         playSfx(playWhoosh);
-        setTimeout(() => S.setDemoShowPhone(false), 1800);
+        setTimeout(() => S.setDemoShowPhone(false), 4500);
       },
     });
 
-    // ===== Phase 4: 折叠记忆 (29-37s) =====
+    // ===== Phase 5: 折叠记忆 (32-38s，6s) =====
     tl.to(cam.position, { x: 2, y: 12, z: 8, duration: 2.5, ease: 'power2.inOut',
       onStart: () => {
         S.setDemoPhase(4);
         S.hideDialogueBubble();
-        S.setDemoSubtitle('每一次思考，都凝固成金色连线——记忆永不重置，星河持续生长');
-        speakNarration('每一次思考，都凝固成金色连线。记忆永不重置，星河持续生长');
+        S.setDemoSubtitle('思考凝成金色连线——知识内化不是记忆，是连线。');
+        speakNarration('思考凝成金色连线——知识内化不是记忆，是连线。', 5);
         // 提取记忆晶体 → 生成金色连线
         if (typeof processDialogue === 'function') {
           processDialogue(jensen.id, wangym.id);
@@ -589,31 +617,42 @@ function NebulaContent() {
         }
       },
     });
-    tl.to({}, { duration: 5.5 });
+    tl.to({}, { duration: 3.5 });
 
-    // ===== Phase 4.5: 决策推演闪现 (37-39s) =====
+    // ===== Phase 6: 决策推演闪现 (38-44s，6s) =====
     tl.to({}, {
-      duration: 2,
+      duration: 6,
       onStart: () => {
-        S.setDemoSubtitle('支持多Agent决策推演——思想者为你出谋划策，生成结构化报告');
-        speakNarration('支持多Agent决策推演。思想者为你出谋划策，生成结构化报告');
+        S.setDemoSubtitle('召集他们开圆桌，多 Agent 横向辩论。');
+        speakNarration('召集他们开圆桌，多 Agent 横向辩论。', 6);
         S.setDemoShowDeliberation(true);
         playSfx(playWhoosh);
-        setTimeout(() => S.setDemoShowDeliberation(false), 1800);
+        setTimeout(() => S.setDemoShowDeliberation(false), 5500);
       },
     });
 
-    // ===== Phase 5: 星河无限 — 数据统计收尾 (39-50s) =====
-    tl.to(cam.position, { x: 0, y: 40, z: 55, duration: 4, ease: 'power2.inOut',
+    // ===== Phase 7: 时间折叠闪现 (44-50s，6s) =====
+    tl.to({}, {
+      duration: 6,
       onStart: () => {
-        S.setDemoPhase(5);
-        S.setDemoHighlight(null);
-        const memCount = Object.keys(S.memories).length;
-        S.setDemoSubtitle(`FoldNeb 折叠星云——125位思想者 · 13个星系 · ${memCount}条记忆——为思考者建造会生长的思想星河`);
-        speakNarration(`FoldNeb 折叠星云。125位思想者，13个星系，${memCount}条记忆。为思考者建造会生长的思想星河`);
+        S.setDemoSubtitle('时间折叠推演——还能和 5 年后的自己聊天。');
+        speakNarration('时间折叠推演——还能和 5 年后的自己聊天。', 7);
+        S.setDemoShowTemporal(true);
+        playSfx(playWhoosh);
+        setTimeout(() => S.setDemoShowTemporal(false), 5500);
       },
     });
-    tl.to({}, { duration: 7 }); // 收尾全景 + Logo + 数据展示
+
+    // ===== Phase 8: 星河收尾 (50-60s，10s) =====
+    tl.to(cam.position, { x: 0, y: 40, z: 55, duration: 4, ease: 'power2.inOut',
+      onStart: () => {
+        S.setDemoPhase(8);
+        S.setDemoHighlight(null);
+        S.setDemoSubtitle('FoldNeb——多 Agent 思想家推演引擎，帮你做战略博弈和认知决策，会动态生长的星河。');
+        speakNarration('FoldNeb——多 Agent 思想家推演引擎，帮你做战略博弈和认知决策，会动态生长的星河。', 8);
+      },
+    });
+    tl.to({}, { duration: 6 }); // 收尾全景 + Logo + 数据展示
   }, [demoActive]);
 
   // 跳过/强制结束巡游
@@ -623,6 +662,8 @@ function NebulaContent() {
       tl.kill();
       demoTimelineRef.current = null;
     }
+    const narr = narrationAudioRef.current;
+    if (narr) { narr.pause(); narrationAudioRef.current = null; }
     const S = useNebulaStore.getState();
     window.speechSynthesis?.cancel();
     stopAmbient();
@@ -632,6 +673,7 @@ function NebulaContent() {
     S.setDemoPhase(0);
     S.setDemoShowPhone(false);
     S.setDemoShowDeliberation(false);
+    S.setDemoShowTemporal(false);
     S.hideDialogueBubble?.();
     S.clearFocus();
   }, []);

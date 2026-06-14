@@ -11,20 +11,6 @@ export default function TriggerButtons() {
       display: 'flex', gap: 8,
     }}>
       <button
-        onClick={openTemporal}
-        title="时间折叠 · 与未来的自己对话"
-        style={{
-          background: 'linear-gradient(135deg, rgba(68,136,255,0.2), rgba(68,100,255,0.15))',
-          border: '1px solid rgba(68,136,255,0.4)',
-          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
-          color: '#8cf', fontSize: '13px', fontFamily: 'system-ui',
-          fontWeight: 600, letterSpacing: '0.5px',
-          boxShadow: '0 0 20px rgba(68,136,255,0.1)',
-        }}
-      >
-        ⏳ 时间折叠
-      </button>
-      <button
         onClick={openDeliberation}
         title="决策推演"
         style={{
@@ -37,6 +23,20 @@ export default function TriggerButtons() {
         }}
       >
         ⚡ 决策推演
+      </button>
+      <button
+        onClick={openTemporal}
+        title="时间折叠 · 与未来的自己对话"
+        style={{
+          background: 'linear-gradient(135deg, rgba(68,136,255,0.2), rgba(68,100,255,0.15))',
+          border: '1px solid rgba(68,136,255,0.4)',
+          borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
+          color: '#8cf', fontSize: '13px', fontFamily: 'system-ui',
+          fontWeight: 600, letterSpacing: '0.5px',
+          boxShadow: '0 0 20px rgba(68,136,255,0.1)',
+        }}
+      >
+        ⏳ 时间折叠
       </button>
     </div>
   );

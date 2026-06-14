@@ -66,7 +66,7 @@ export default function NebulaUI() {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }}>
       {/* ========== 顶部开发进度条（像素字 + 点状进度） ========== */}
-      <DevProgressBar />
+      <DevProgressBar runDemo={runDemo} />
       {/* ========== 左上 Logo + 工具栏 ========== */}
       <div style={{ position: 'absolute', top: 56, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>
         <div style={{ marginBottom: 8 }}>
@@ -75,7 +75,7 @@ export default function NebulaUI() {
             textShadow: '0 0 24px rgba(255,215,0,0.4), 0 2px 4px rgba(0,0,0,0.6)',
           }}>FoldNeb 折叠星云</div>
           <div style={{ fontSize: 10, color: 'rgba(136,153,204,0.5)', letterSpacing: '0.15em', marginTop: 3 }}>
-            125位思想者 · 13个星系
+            13个星系 · 1000+位思想者 · 83亿个人生 · 1万亿个灵魂
           </div>
           <div style={{ width: 140, height: 1, background: 'linear-gradient(90deg, rgba(255,215,0,0.4), transparent)', marginTop: 6 }} />
         </div>
@@ -101,12 +101,6 @@ export default function NebulaUI() {
               fontFamily: 'inherit', letterSpacing: '0.05em', transition: 'all 0.2s',
               boxShadow: customClone ? '0 0 12px rgba(125,249,255,0.2)' : 'none',
             }}>{customClone ? `🪐 ${customClone.avatar} ${customClone.name}` : '🪐 创建分身'}</button>
-            <button onClick={() => setShowDistrictPanel(!showDistrictPanel)} style={{
-              padding: '7px 14px', borderRadius: 8,
-              background: showDistrictPanel ? 'linear-gradient(135deg, rgba(136,153,204,0.35), rgba(136,153,204,0.2))' : 'linear-gradient(135deg, rgba(136,153,204,0.15), rgba(136,153,204,0.05))',
-              border: '1px solid rgba(136,153,204,0.4)', backdropFilter: 'blur(8px)',
-              color: '#c0cde0', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s',
-            }}>🗂️ 十三星系</button>
             <div style={{ position: 'relative' }}>
               <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索思想者..." style={{
                 width: 150, padding: '7px 12px 7px 34px', borderRadius: 8,
@@ -126,6 +120,12 @@ export default function NebulaUI() {
                 </div>
               )}
             </div>
+            <button onClick={() => setShowDistrictPanel(!showDistrictPanel)} style={{
+              padding: '7px 14px', borderRadius: 8,
+              background: showDistrictPanel ? 'linear-gradient(135deg, rgba(136,153,204,0.35), rgba(136,153,204,0.2))' : 'linear-gradient(135deg, rgba(136,153,204,0.15), rgba(136,153,204,0.05))',
+              border: '1px solid rgba(136,153,204,0.4)', backdropFilter: 'blur(8px)',
+              color: '#c0cde0', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s',
+            }}>🗂️ 十三星系</button>
             <span style={{ fontSize: 10, color: 'rgba(136,153,204,0.3)' }}>单击星体 · 拖拽旋转</span>
           </div>
         )}

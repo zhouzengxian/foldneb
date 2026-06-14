@@ -7,7 +7,7 @@
  *  - 绝不"瞎说"：API 返回内容直接使用，不编造
  */
 
-import { callLLMWithProvider, DEFAULT_PROVIDER_ID, hasValidKey, getLastApiError } from './modelConfig';
+import { callLLMWithProvider, DEFAULT_PROVIDER_ID, hasValidKey, getLastApiError, getUnifiedProvider, setUnifiedProvider } from './modelConfig';
 import { agents, getAgent } from '../data/agents';
 import { agentMoments, getAutoReply } from '../data/agentMoments';
 import useNebulaStore from '../store/useNebulaStore.js';
@@ -77,21 +77,15 @@ export function getAgentDisplayName(agentId) {
 }
 
 // ============================================================
-// 当前使用的 Provider（复用决策推演的设置机制）
+// 统一 Provider（全局共享，持久化 localStorage）
+// 保留别名兼容旧导入
 // ============================================================
-let currentProviderId = DEFAULT_PROVIDER_ID;
-
-export function setMomentsProvider(providerId) {
-  currentProviderId = providerId || DEFAULT_PROVIDER_ID;
-}
-
-export function getMomentsProvider() {
-  return currentProviderId;
-}
+export const setMomentsProvider = setUnifiedProvider;
+export const getMomentsProvider = getUnifiedProvider;
 
 /** 检查 API 是否就绪（有有效 Key） */
 export function isMomentsApiReady() {
-  return hasValidKey(currentProviderId);
+  return hasValidKey(getUnifiedProvider());
 }
 
 // ============================================================
@@ -238,7 +232,7 @@ export async function generateAgentReply(agentId, userComment, history = [], pos
   ].filter(Boolean).join('\n');
 
   // 3. 调用大模型（较短超时，朋友圈要求快速响应）
-  const result = await callLLMWithProvider(currentProviderId, systemPrompt, userPrompt, {
+  const result = await callLLMWithProvider(getUnifiedProvider(), systemPrompt, userPrompt, {
     temperature: 0.8,
     maxTokens: 200,
     timeoutMs: 12000,
@@ -312,7 +306,7 @@ export async function generateCustomCloneReply(userComment, history = []) {
       `请以 ${clone.name} 的风格回复（直接给出回复内容，30-120字）：`,
     ].filter(Boolean).join('\n');
 
-    const result = await callLLMWithProvider(currentProviderId, systemPrompt, userPrompt, {
+    const result = await callLLMWithProvider(getUnifiedProvider(), systemPrompt, userPrompt, {
       temperature: 0.85,
       maxTokens: 400,
       timeoutMs: 15000,
@@ -354,7 +348,7 @@ export async function generateCustomCloneReply(userComment, history = []) {
       }
       const systemPrompt = buildCustomClonePrompt(clone);
       const userPrompt = `【探索者的问题】\n${userComment}\n\n请以 ${clone.name} 的风格回复（30-120字）：`;
-      const result = await callLLMWithProvider(currentProviderId, systemPrompt, userPrompt, {
+      const result = await callLLMWithProvider(getUnifiedProvider(), systemPrompt, userPrompt, {
         temperature: 0.85, maxTokens: 400, timeoutMs: 15000,
       });
       if (!result || !result.trim()) {
@@ -394,7 +388,7 @@ export async function generateCustomCloneReply(userComment, history = []) {
       `请基于上述知识库资料，以 ${clone.name} 的风格回复（30-150字）：`,
     ].filter(Boolean).join('\n');
 
-    const result = await callLLMWithProvider(currentProviderId, systemPrompt, userPrompt, {
+    const result = await callLLMWithProvider(getUnifiedProvider(), systemPrompt, userPrompt, {
       temperature: 0.7,
       maxTokens: 500,
       timeoutMs: 18000,
