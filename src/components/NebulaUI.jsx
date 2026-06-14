@@ -274,7 +274,7 @@ export default function NebulaUI() {
           ))}
         </div>
         <div className="dev-label">开发进度</div>
-        <div className="pixel-text">80%</div>
+        <div className="pixel-text">84%</div>
       </div>
       {/* ========== 左上 Logo + 工具栏 ========== */}
       <div style={{ position: 'absolute', top: 56, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>

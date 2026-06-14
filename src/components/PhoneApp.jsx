@@ -9,6 +9,7 @@ import {
 } from '../utils/agentReplyEngine';
 import { MODEL_PROVIDERS, hasValidKey, DEFAULT_PROVIDER_ID } from '../utils/modelConfig';
 import ApiSettingsPanel from './ApiSettingsPanel';
+import { UserPostCard, AgentDetailScreen, UserMomentsScreen, ComposePost } from './MomentsExtras';
 
 // ====== iPhone 17 外观常量 ======
 const PHONE = {
@@ -142,18 +143,26 @@ export default function PhoneApp() {
             <TabItem label="我" active={phoneScreen === 'profile'} onClick={() => setPhoneScreen('profile')} />
           </div>
         </div>
-      </div>
 
-      {/* 关闭按钮 */}
-      <div onClick={closePhone}
-        style={{
-          marginTop: 8, color: '#636366', fontSize: 18, cursor: 'pointer',
-          transition: 'color 0.2s', userSelect: 'none',
-        }}
-        onMouseOver={(e) => { e.currentTarget.style.color = '#fff'; }}
-        onMouseOut={(e) => { e.currentTarget.style.color = '#636366'; }}
-      >
-        ▼
+        {/* 右上角关闭按钮 */}
+        <div onClick={closePhone}
+          title="收起朋友圈"
+          style={{
+            position: 'absolute', top: -11, right: -11, zIndex: 120,
+            width: 28, height: 28, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #3a3a3c, #1c1c1e)',
+            border: '0.5px solid rgba(255,255,255,0.25)',
+            color: '#e5e5ea', fontSize: 14, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.45)', lineHeight: 1,
+            transition: 'transform 0.15s, color 0.2s', userSelect: 'none',
+            fontFamily: 'system-ui, sans-serif',
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.12)'; e.currentTarget.style.color = '#fff'; }}
+          onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.color = '#e5e5ea'; }}
+        >
+          ✕
+        </div>
       </div>
     </div>
   );
@@ -179,19 +188,21 @@ function TabItem({ label, active, onClick }) {
 }
 
 // ====== VIP 标识符（接入大模型的核心 Agent 专属） ======
-// 形似"会员"认证标，金色渐变 ✦ 符号
+// 闪亮小星星：金色渐变 + twinkle 闪烁动画
 function VipBadge({ size = 12 }) {
   return (
     <span title="AI · 已接入大模型" style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: size + 4, height: size + 4, borderRadius: '50%',
+      marginLeft: 2, verticalAlign: 'middle', lineHeight: 1,
+      userSelect: 'none',
+      animation: 'fnStarTwinkle 2.4s ease-in-out infinite',
       background: 'linear-gradient(135deg, #FFD700, #FF8C00)',
-      color: '#fff', fontSize: size - 2, fontWeight: 900,
-      boxShadow: '0 1px 3px rgba(255,140,0,0.45)',
-      marginLeft: 3, verticalAlign: 'middle', lineHeight: 1,
-      fontFamily: 'system-ui, sans-serif', userSelect: 'none',
+      WebkitBackgroundClip: 'text', backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      fontSize: size, fontWeight: 900,
+      filter: 'drop-shadow(0 0 2px rgba(255,180,0,0.55))',
     }}>
-      ✦
+      ★
     </span>
   );
 }
@@ -239,10 +250,17 @@ function MomentsScreen() {
   const likes = useNebulaStore((s) => s.likes);
   const momentsMode = useNebulaStore((s) => s.momentsMode);
   const setMomentsMode = useNebulaStore((s) => s.setMomentsMode);
+  const setMomentsViewer = useNebulaStore((s) => s.setMomentsViewer);
+  const userPosts = useNebulaStore((s) => s.userPosts);
+  const momentsViewer = useNebulaStore((s) => s.momentsViewer);
 
   // API 模式状态
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiProvider, setApiProvider] = useState(getMomentsProvider());
+  // 搜索
+  const [searchQuery, setSearchQuery] = useState('');
+  // 发布浮层
+  const [composing, setComposing] = useState(false);
 
   // 进入 API 模式 / provider 变化时同步引擎
   // 自动选择一个已配置有效 Key 的 provider，否则用默认
@@ -259,6 +277,14 @@ function MomentsScreen() {
     }
   }, [momentsMode]);
 
+  // 二级页：根据 momentsViewer 切换（所有 hooks 已全部调用完毕）
+  if (momentsViewer?.kind === 'agent') {
+    return <AgentDetailScreen agentId={momentsViewer.id} />;
+  }
+  if (momentsViewer?.kind === 'me') {
+    return <UserMomentsScreen />;
+  }
+
   const handleModeChange = (mode) => {
     setMomentsMode(mode);
     if (mode === 'api' && !isMomentsApiReady()) {
@@ -268,8 +294,13 @@ function MomentsScreen() {
   };
 
   if (!userProfile) return <LoginPrompt />;
-  if (friends.length === 0) return <EmptyMoments />;
 
+  // 搜索匹配的 agent（覆盖所有 tier1Agents，不止好友）
+  const searchResults = searchQuery.trim()
+    ? tier1Agents.filter(a => a.name.includes(searchQuery.trim()))
+    : [];
+
+  // ===== 构建 feed：agent 帖子 + 用户帖子，按时间倒序混合 =====
   const feed = [];
   friends.forEach((agentId) => {
     const agentData = agentMoments[agentId] || agentMoments[agentId.replace(/_/g, '')];
@@ -278,11 +309,20 @@ function MomentsScreen() {
     todayPosts.forEach((post) => {
       const likeKey = `${agentId}|${post.postIndex}`;
       feed.push({
+        kind: 'agent',
         agentId, name: agentData.name, avatar: agentData.avatar,
         color: agentData.color, text: post.text, image: post.image,
         time: post.time, postIndex: post.postIndex,
         liked: !!likes[likeKey], likeKey,
       });
+    });
+  });
+  // 混入用户自己的帖子
+  userPosts.forEach((up) => {
+    feed.push({
+      kind: 'user',
+      key: up.id,
+      text: up.text, image: up.image, time: up.time, post: up,
     });
   });
   feed.sort((a, b) => b.time.localeCompare(a.time));
@@ -303,16 +343,38 @@ function MomentsScreen() {
         }}>
           FoldNeb
         </div>
+        {/* 相机发布按钮（仿微信封面右上角相机） */}
+        <button onClick={() => setComposing(true)} title="发布朋友圈"
+          style={{
+            position: 'absolute', top: 14, right: 14,
+            width: 34, height: 34, borderRadius: 8,
+            background: 'rgba(0,0,0,0.28)', border: '0.5px solid rgba(255,255,255,0.25)',
+            color: '#fff', fontSize: 17, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(4px)', lineHeight: 1, padding: 0,
+          }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="1.8">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
+          </svg>
+        </button>
         <div style={{
           position: 'absolute', bottom: 10, left: 16,
           display: 'flex', alignItems: 'flex-end', gap: 10,
         }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 10,
-            background: 'linear-gradient(135deg, #48484a, #1c1c1e)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 26, color: '#fff', border: '2px solid rgba(255,255,255,0.25)',
-          }}>
+          {/* 我的头像：可点击进入我的朋友圈 */}
+          <div onClick={() => setMomentsViewer({ kind: 'me' })}
+            title="查看我的朋友圈"
+            style={{
+              width: 56, height: 56, borderRadius: 10,
+              background: 'linear-gradient(135deg, #48484a, #1c1c1e)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 26, color: '#fff', border: '2px solid rgba(255,255,255,0.25)',
+              cursor: 'pointer', transition: 'transform 0.15s',
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.06)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
             {userProfile.avatar || '👤'}
           </div>
           <div style={{
@@ -323,6 +385,74 @@ function MomentsScreen() {
             {userProfile.name}
           </div>
         </div>
+      </div>
+
+      {/* 搜索框：仿微信搜索 */}
+      <div style={{ position: 'relative', margin: '8px 12px 2px' }}>
+        <input type="text" value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="搜索思想者…"
+          style={{
+            width: '100%', padding: '7px 12px 7px 30px', borderRadius: 8,
+            border: '0.5px solid rgba(0,0,0,0.08)', background: '#f5f5f7',
+            color: '#1d1d1f', fontSize: 12, outline: 'none',
+            fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+            boxSizing: 'border-box',
+          }} />
+        <svg style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, opacity: 0.35 }}
+          viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" strokeWidth="2">
+          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        {searchResults.length > 0 && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 3,
+            background: '#fff', borderRadius: 8, overflow: 'hidden',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+            border: '0.5px solid rgba(0,0,0,0.06)',
+            maxHeight: 240, overflowY: 'auto', zIndex: 30,
+          }}>
+            {searchResults.slice(0, 10).map((a) => {
+              const isFr = friends.includes(a.id);
+              return (
+                <div key={a.id}
+                  onClick={() => { setMomentsViewer({ kind: 'agent', id: a.id }); setSearchQuery(''); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 9,
+                    padding: '7px 12px', cursor: 'pointer',
+                    borderBottom: '0.5px solid rgba(0,0,0,0.04)',
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 5, flexShrink: 0,
+                    background: a.color || '#636366',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14,
+                  }}>{a.emoji}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 500, color: '#1d1d1f',
+                      display: 'flex', alignItems: 'center', gap: 3,
+                      fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+                    }}>
+                      {a.name}
+                      {isLLMAgent(a.id) && <VipBadge size={10} />}
+                    </div>
+                    <div style={{
+                      fontSize: 9, color: '#aeaeb2',
+                      fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+                    }}>{a.title}</div>
+                  </div>
+                  <span style={{
+                    fontSize: 9, color: isFr ? '#aeaeb2' : '#07C160',
+                    fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+                  }}>{isFr ? '已添加' : '点开查看'}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Demo / AI 模式切换 */}
@@ -350,11 +480,14 @@ function MomentsScreen() {
         </div>
       )}
 
-      {/* 动态列表 */}
+      {/* 动态列表（agent + 用户混合） */}
+      {feed.length === 0 && <EmptyMoments />}
       {feed.map((item) => (
-        <MomentCard key={item.likeKey} item={item}
-          mode={momentsMode}
-          onLike={() => toggleLike(item.agentId, item.postIndex)} />
+        item.kind === 'user'
+          ? <UserPostCard key={item.key} post={item.post} />
+          : <MomentCard key={item.likeKey} item={item}
+              mode={momentsMode}
+              onLike={() => toggleLike(item.agentId, item.postIndex)} />
       ))}
 
       {/* API 设置浮层（复用决策推演的设置面板，深色主题） */}
@@ -364,6 +497,11 @@ function MomentsScreen() {
           onProviderChange={(id) => { setMomentsProvider(id); setApiProvider(id); }}
           onClose={() => setShowApiSettings(false)}
         />
+      )}
+
+      {/* 发布朋友圈浮层 */}
+      {composing && (
+        <ComposePost onClose={() => setComposing(false)} />
       )}
     </div>
   );
@@ -512,23 +650,30 @@ function MomentCard({ item, onLike, mode = 'demo' }) {
       borderBottom: '0.5px solid rgba(0,0,0,0.04)',
     }}>
       <div style={{ display: 'flex', gap: 10 }}>
-        {/* 头像 */}
-        <div style={{
-          width: 36, height: 36, borderRadius: 4, flexShrink: 0,
-          background: item.color || '#636366',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, color: '#fff',
-        }}>
+        {/* 头像：可点击进入 Agent 主页 */}
+        <div onClick={() => useNebulaStore.getState().setMomentsViewer({ kind: 'agent', id: item.agentId })}
+          title={`查看 ${item.name} 的朋友圈`}
+          style={{
+            width: 36, height: 36, borderRadius: 4, flexShrink: 0,
+            background: item.color || '#636366',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, color: '#fff', cursor: 'pointer',
+            transition: 'transform 0.15s',
+          }}
+          onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.08)'}
+          onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
           {item.avatar}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* 昵称 */}
-          <div style={{
-            fontSize: 13, fontWeight: 600, color: '#576b95',
-            marginBottom: 3, fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
-            display: 'flex', alignItems: 'center',
-          }}>
+          {/* 昵称：可点击进入 Agent 主页 */}
+          <div onClick={() => useNebulaStore.getState().setMomentsViewer({ kind: 'agent', id: item.agentId })}
+            style={{
+              fontSize: 13, fontWeight: 600, color: '#576b95',
+              marginBottom: 3, fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+              display: 'flex', alignItems: 'center', cursor: 'pointer',
+            }}>
             {item.name}
             {llmAgent && <VipBadge size={11} />}
           </div>
@@ -735,15 +880,21 @@ function ContactsScreen() {
               background: '#fff', borderBottom: '0.5px solid rgba(0,0,0,0.04)',
               padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10,
             }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: 4, flexShrink: 0,
-              background: agent.color || '#636366',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16,
-            }}>
+            <div onClick={() => useNebulaStore.getState().setMomentsViewer({ kind: 'agent', id: agent.id })}
+              title={`查看 ${agent.name} 的朋友圈`}
+              style={{
+                width: 34, height: 34, borderRadius: 4, flexShrink: 0,
+                background: agent.color || '#636366',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 16, cursor: 'pointer', transition: 'transform 0.15s',
+              }}
+              onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.08)'}
+              onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
               {agent.emoji}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+              onClick={() => useNebulaStore.getState().setMomentsViewer({ kind: 'agent', id: agent.id })}>
               <div style={{
                 fontSize: 12, fontWeight: 500, color: '#1d1d1f',
                 fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
@@ -756,7 +907,7 @@ function ContactsScreen() {
                 fontSize: 9, color: '#aeaeb2',
                 fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
               }}>
-                {agent.title}{isLLMAgent(agent.id) ? ' · ✦ AI' : ''}
+                {agent.title}{isLLMAgent(agent.id) ? ' · ★ AI' : ''}
               </div>
             </div>
             <button onClick={() => {

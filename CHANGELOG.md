@@ -1,5 +1,49 @@
 # Changelog · FoldNeb 折叠星云
 
+## V4.4 — 朋友圈大版本·仿微信完整社交闭环 (2026-06-14)
+
+朋友圈从「只读 Agent 动态」升级为**用户也能参与**的完整社交闭环：搜索 Agent、点开头像看主页、发布朋友圈并收获 agent 自动回复。
+
+### 核心改动
+
+#### 1. Agent 搜索（`PhoneApp.jsx`）
+- **顶部搜索框**：`tier1Agents.filter(a => a.name.includes(keyword))` 覆盖全星河 agent（不止已加好友）
+- 下拉结果卡片显示头像 + 名称 + 状态
+- 点击直接进入 `AgentDetailScreen`，并清空搜索词
+
+#### 2. Agent 个人主页（`MomentsExtras.jsx::AgentDetailScreen`）仿微信设计
+- **入口**：朋友圈卡片头像/昵称可点击 + 通讯录头像可点击 + 搜索结果点击
+- **页面结构**：sticky 顶部导航（‹ 返回 / Agent 名 / + 关注按钮）+ 渐变封面 + 大头像 + 基本信息 + 描述
+- **今日动态**：`getTodayPosts(agentId)` 列出该 Agent 今天发布的所有帖子
+- **「🌌 在星河中查看详情 →」按钮**：`focusAgent + selectAgent + closePhone`，一键跳到 3D 星河详情页
+
+#### 3. 我的朋友圈主页（`MomentsExtras.jsx::UserMomentsScreen`）
+- **入口**：朋友圈封面左下角「我的头像」可点击
+- 页面展示我所有已发布动态（`userPosts`），样式同朋友圈卡片
+- 空态提示：「还没有发布过动态，返回朋友圈点右上角相机发布吧 ✨」
+
+#### 4. 发布朋友圈浮层（`MomentsExtras.jsx::ComposePost`）仿微信设计
+- **入口**：朋友圈封面右上角相机按钮（毛玻璃半透明 SVG）
+- **顶部导航**：取消 / 这一刻的想法… / 发表按钮（绿底 `#07C160`，禁用态灰）
+- **文本输入**：textarea 最大 200 字，autofocus
+- **配图选择**：12 个表情 emoji（🌟🌙🔥💡🌊🏔️🦋☕📚🎯♾️ + 不配图），点击切换
+- **提示**：「✨ 发布后，1-2 位你已添加的好友会给你点赞或评论」
+
+#### 5. 发布后 agent 自动反应（`MomentsExtras.jsx::triggerAgentReactions`）
+- 从 `friends` 数组随机抽 1-2 位（`Math.random() < 0.6` 决定是否抽第 2 位）
+- 每位随机选**评论**（10 条内置模板，如「说得真好，我深有同感。」）或**点赞 emoji**（👍❤️🌟✨）
+- 错峰延迟：`600 + i*800 + random*600` ms，模拟真人阅读思考节奏
+- 调用 `addUserReaction(postId, ...)` 写入 `userReactions`
+
+### 修改文件清单
+
+- `src/components/PhoneApp.jsx`：搜索框 + Agent 头像可点 + 我的头像入口 + 相机发布按钮
+- `src/components/MomentsExtras.jsx`（新增）：UserPostCard / AgentDetailScreen / UserMomentsScreen / ComposePost / triggerAgentReactions
+- `src/data/agentMoments.js`：可能补充了用户帖子的反应模板数据
+- `src/store/useNebulaStore.js`：新增 `userPosts` / `userReactions` / `addUserPost` / `addUserReaction` / `deleteUserPost` / `deleteUserReaction` / `momentsViewer` / `setMomentsViewer` 等
+
+---
+
 ## V4.3 — 档案时间线 + 宽屏适配 + API 统一 (2026-06-14)
 
 情报分析升级为**时间线折叠结构**，档案 Modal 适配宽屏，API 配置统一到决策推演共享的 Provider 机制。

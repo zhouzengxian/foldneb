@@ -539,6 +539,7 @@ npm run build
 | **V4.1** | 📖 **思想者深度档案**：黄仁勋/马斯克首批补齐 6 类深度字段（传记/时间轴/核心思想/语录/代表作/启示）→ Modal 6 大版块带视觉分隔；graceful fallback 让 123 个无深度字段 agent 不破坏 |
 | **V4.2** | 🦐 **Skill 化大版本**：商业情报分析从硬编码 prompt 升级为**用户可编辑/新增/切换的 Skill 系统**（内置「商业动态逻辑情报虾」三层框架）+ Skill 管理面板（列表/编辑/导出/重置）+ 三渠道本地留痕（项目源 + Obsidian vault `5_skill库` + 运行时导出 md） |
 | **V4.3** | 📊 **档案时间线 + 宽屏适配 + API 统一**：① 情报分析改为**时间线折叠结构**（`analysisHistory` 数组，最新情报置顶 + 历史情报按日期折叠展开，黄仁勋首批 2 条：2026-06-14 Computex 新情报 + 2026-04-20 原情报）② 档案 Modal **宽屏优化**（1280px+ 断点撑宽到 1160px / Grid 自适应模块拼排 / sticky 顶部工具条只钉工具不钉整栏，解决左右两栏下滑不同步）③ 档案页 API **统一到决策推演共享的 Provider 机制**（`getArchiveProvider` 复用 `getEffectiveConfig` + `getCorsProxyUrl`，配一次密钥两边可用） |
+| **V4.4** | 📱 **朋友圈大版本·仿微信完整社交闭环**：① **顶部搜索框**可检索全星河 agent（`tier1Agents.filter`），点击结果直接进 Agent 主页 ② **Agent 头像 / 昵称可点开**进入仿微信个人主页（`AgentDetailScreen`：封面+头像+今日动态+关注按钮+「🌌 在星河中查看详情」一键跳 3D 详情页）③ **我的头像可点开**「我的朋友圈」主页（`UserMomentsScreen`：展示我所有已发布动态）④ **可自行发布朋友圈**（封面右上角相机按钮 → `ComposePost` 浮层：文本输入 + 12 个表情配图 + 200 字限制）⑤ **发布后自动触发 agent 反应**（`triggerAgentReactions`：1-2 位已加好友随机点赞/评论，含延迟） |
 
 ---
 

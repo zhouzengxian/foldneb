@@ -159,6 +159,12 @@ html, body, #root {
   50% { opacity: 0; }
 }
 
+/* 朋友圈 AI 星星闪烁 */
+@keyframes fnStarTwinkle {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 2px rgba(255,180,0,0.55)); transform: scale(1); }
+  50% { opacity: 0.55; filter: drop-shadow(0 0 5px rgba(255,200,0,0.9)); transform: scale(1.12); }
+}
+
 /* ===== Demo 动画 ===== */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateX(-50%) translateY(20px); }

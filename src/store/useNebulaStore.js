@@ -108,6 +108,13 @@ const useNebulaStore = create((set, get) => ({
   replies: loadFromStorage('replies', {}),
   // 朋友圈模式：'demo'（关键词匹配）/ 'api'（大模型回复）
   momentsMode: loadFromStorage('momentsMode', 'demo'),
+  // 用户自己发布的朋友圈动态（最新置顶）
+  // [{ id, text, image, time: 'HH:MM', createdAt: ISO }]
+  userPosts: loadFromStorage('userPosts', []),
+  // agent 对用户帖子的点赞/评论：{ [postId]: [{ type:'like'|'comment', agentId, agentName, text?, time: 'HH:MM' }] }
+  userReactions: loadFromStorage('userReactions', {}),
+  // 朋友圈当前查看的对象：null（主页）| { kind:'agent', id } | { kind:'me' }
+  momentsViewer: null,
 
   // ========================================
   // 决策推演系统
@@ -364,6 +371,61 @@ const useNebulaStore = create((set, get) => ({
     allPosts.sort((a, b) => b.time.localeCompare(a.time));
     return allPosts;
   },
+
+  // ========================================
+  // 用户朋友圈发布 + agent 自动反应
+  // ========================================
+  addUserPost: (text, image = '') => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const post = {
+      id: 'up_' + Date.now(),
+      text: text.trim(),
+      image,
+      time: `${hh}:${mm}`,
+      createdAt: now.toISOString(),
+    };
+    const userPosts = [post, ...get().userPosts];
+    set({ userPosts });
+    saveToStorage('userPosts', userPosts);
+    return post;
+  },
+
+  deleteUserPost: (postId) => {
+    const userPosts = get().userPosts.filter(p => p.id !== postId);
+    set({ userPosts });
+    saveToStorage('userPosts', userPosts);
+    // 顺手清掉对应 reactions
+    const userReactions = { ...get().userReactions };
+    delete userReactions[postId];
+    set({ userReactions });
+    saveToStorage('userReactions', userReactions);
+  },
+
+  // agent 给用户帖子点赞/评论（内置模拟，不走 API）
+  addUserReaction: (postId, reaction) => {
+    const userReactions = { ...get().userReactions };
+    const list = userReactions[postId] ? [...userReactions[postId]] : [];
+    list.push({ ...reaction, time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) });
+    userReactions[postId] = list;
+    set({ userReactions });
+    saveToStorage('userReactions', userReactions);
+  },
+
+  // 用户给自己帖子删除某条 agent reaction
+  deleteUserReaction: (postId, idx) => {
+    const userReactions = { ...get().userReactions };
+    if (!userReactions[postId]) return;
+    userReactions[postId] = userReactions[postId].filter((_, i) => i !== idx);
+    if (userReactions[postId].length === 0) delete userReactions[postId];
+    set({ userReactions });
+    saveToStorage('userReactions', userReactions);
+  },
+
+  // 切换朋友圈查看对象
+  setMomentsViewer: (viewer) => set({ momentsViewer: viewer }),
+
 
   // ========================================
   // Actions: 决策推演
