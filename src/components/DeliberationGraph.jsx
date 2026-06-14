@@ -22,9 +22,6 @@ function withAlpha(hex, alpha) {
  * - 连线：用户 ↔ Agent（金色脉动）、Agent ↔ Agent（冲突红/共识绿/洞见蓝）
  * - 星空背景 + 分区卡片 + 实时动画
  */
-
-const W = 480;
-// 动态高度：根据轮数 + 洞察数自适应
 const BASE_H = 420;
 const ROUND_H = 140;
 const INSIGHT_H = 26;
@@ -56,19 +53,19 @@ agentColorMap.mochi = COL.mochi;
 const STAR_COUNT = 90;
 let stars = null; // 惰性初始化
 
-export default function DeliberationGraph({ session, phase, onSelectNode, selectedNode }) {
+export default function DeliberationGraph({ session, phase, onSelectNode, selectedNode, maxW = 480 }) {
   const canvasRef = useRef();
   const posRef = useRef({});
   const edgeDataRef = useRef([]);
   const frameRef = useRef(0);
   const hoverRef = useRef(null);
-  const dragNodeRef = useRef(null); // ★ 当前正在拖动的节点
+  const dragNodeRef = useRef(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const selectedNodeRef = useRef(selectedNode);
   selectedNodeRef.current = selectedNode;
   const [cursor, setCursor] = useState('default');
 
-  // 动态高度代入 Hook 调用前计算
+  const W = maxW;
   const rounds = session?.rounds || [];
   const insights = session?.insights || [];
   const H = Math.max(300, BASE_H + rounds.length * ROUND_H + insights.filter(i => i.type).length * 8);

@@ -66,7 +66,7 @@ export default function PhoneApp() {
   return (
     <div style={{
       position: 'fixed', right: isSmall ? 8 : 20, top: '50%', transform: 'translateY(-50%)',
-      zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center',
+      zIndex: 57, display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
       {/* ==== iPhone 17 机身 ==== */}
       <div style={{

@@ -369,7 +369,7 @@ export default function TemporalDeliberation() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 50,
+      position: 'fixed', inset: 0, zIndex: 58,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(4,4,16,0.5)', backdropFilter: 'blur(4px)',
     }}>

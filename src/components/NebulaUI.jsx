@@ -66,7 +66,7 @@ export default function NebulaUI() {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 55, pointerEvents: 'none' }}>
       {/* ========== 顶部开发进度条（像素字 + 点状进度） ========== */}
       <DevProgressBar
         onLaunchStarTour={runDemo}
@@ -81,7 +81,7 @@ export default function NebulaUI() {
         }}
       />
       {/* ========== 左上 Logo + 工具栏 ========== */}
-      <div style={{ position: 'absolute', top: 56, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>
+      <div className="nebula-top-toolbar" style={{ position: 'absolute', top: 56, left: 24, pointerEvents: 'auto', zIndex: 20, maxWidth: 500 }}>
         <div style={{ marginBottom: 8 }}>
           <div style={{
             fontSize: 20, fontWeight: 700, color: '#FFD700', letterSpacing: '0.12em',

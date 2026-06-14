@@ -1,5 +1,42 @@
 # Changelog · FoldNeb 折叠星云
 
+## V4.11 — 📱 手机端全面调优 (2026-06-15)
+
+### 🛡️ 防缩放/防回弹
+- `index.html` viewport 加 `maximum-scale=1.0, user-scalable=no` + 防缓存 meta
+- `index.css` body 加 `touch-action: manipulation; overscroll-behavior: none; user-select: none`
+- 手机端不再被双击/双指缩放破坏 3D 体验
+
+### 📱 UI 响应式缩小
+- **OnboardingGuide** (`OnboardingGuide.jsx`): 手机端 card padding 36→18, 标题 24→18, 描述 13→11, 按钮缩小
+- **PhoneApp** (`PhoneApp.jsx`): 手机壳 340×660→230×460, 收缩标签缩小, right 20→8
+- **TriggerButtons** (`TriggerButtons.jsx`): 决策推演/时间折叠按钮缩小, gap 8→4
+- **DevProgressBar** (`index.css`): "播放demo" 手机端 dot 缩小+`flex-wrap: nowrap` 强制一行
+
+### 🏗️ 布局不重叠
+- 顶部三区: MobileBanner(top:0) → DevProgressBar(top:34) → nebula-top-toolbar(top:72)
+- AgentPanel: × 按钮 18→36px+圆形底纹+面板 96vw 自适应
+- **z-index 全局重构**: PhoneApp 50→57, NebulaUI 10→55, DeliberationUI 50→58, TemporalDeliberation 50→58
+- 决策推演面板: 手机端隐去右侧 DeliberationGraph, flex column, 打字滚动 instant 紧跟
+
+### 🌀 星体旋转速度
+- `useNebulaStore` 新增 `rotationSpeed`(默认1, 范围0.2~5), `setRotationSpeed` clamp
+- DevFolder 加滑块 UI: range 输入 + 1x/2x/3x 快捷档位
+- 5 个 3D 组件 9 处旋转增量 × speed: NebulaScene(光环/粒子/相机), UserPlanets(月球/环), AgentNode(agent环/选中环)
+- `useFrame` 内 `useNebulaStore.getState()` 读取, 不触发重渲染
+
+### 🔇 旁白修复
+- `NebulaScene.jsx` `speakNarration`: 复用同一 Audio 元素, 不再每次 `new Audio()`, 修复手机端仅首句有声音
+
+### 🏷️ 文案 + 标题
+- DevFolder: "开发者工具"→"更多功能", "调试"→"调试（开发者工具）"
+- `index.html` title 去掉"开发进度 80%"
+
+### 👾 GitHub Pages
+- 部署脚本统一 `npx gh-pages -d dist --no-history` (防历史膨胀)
+
+---
+
 ## V4.10 — 配音系统 + 叙事升级 + API 全平台统一 (2026-06-15)
 
 ### 🎙️ 星河巡游预录制语音旁白（`scripts/generate-narration.cjs`）

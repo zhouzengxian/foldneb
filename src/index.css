@@ -515,12 +515,14 @@ html, body, #root {
 /* ===== 移动端全局补丁 ===== */
 @media (max-width: 600px) {
   /* NebulaUI 左上角 */
-  .nebula-top-toolbar { top: 40px !important; left: 8px !important; }
+  .nebula-top-toolbar { top: 72px !important; left: 8px !important; }
 
-  /* DevProgressBar 顶部脉冲条缩小 */
-  .dev-progress-bar { padding: 4px 8px; gap: 6px; border-radius: 0 0 6px 6px; }
+  /* DevProgressBar 顶部脉冲条缩小 + 避开 MobileBanner + 强制一行 */
+  .dev-progress-bar { top: 34px; padding: 4px 10px; gap: 6px; border-radius: 0 0 6px 6px; flex-wrap: nowrap; white-space: nowrap; }
   .dev-progress-bar .dev-label { font-size: 10px; }
   .dev-progress-bar .pixel-text { font-size: 9px; }
+  .dot-track { gap: 2px; }
+  .dot-track .dot { width: 7px; height: 7px; }
 
   /* Scene Demo 面板 */
   .scenario-demo-card { padding: 16px 12px !important; max-width: 94vw !important; }

@@ -80,6 +80,7 @@ const PHASES = {
 };
 
 export default function DeliberationUI() {
+  const isSmall = typeof window !== 'undefined' && window.innerWidth < 600;
   const {
     deliberationOpen, deliberationPhase, deliberationSession,
     openDeliberation, closeDeliberation, setDeliberationPhase,
@@ -460,8 +461,8 @@ export default function DeliberationUI() {
         addDeliberationDialogue(ri, d);
         await typeText(key, d.text, 350);
         addLog(`  ${d.agentName || d.agentId}: ${d.text.slice(0, 60)}…`);
-        // 打完一句，跟随滚动到这条卡片
-        scrollContentToBottom();
+        // 打完一句，跟随滚动到这条卡片（instant 避免 smooth 动画落后于打字速度）
+        scrollContentToBottom(false);
       }
 
       if (round.insights && round.insights.length > 0) {
@@ -528,7 +529,7 @@ export default function DeliberationUI() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 50,
+      position: 'fixed', inset: 0, zIndex: 58,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(4,4,16,0.5)', backdropFilter: 'blur(4px)',
     }}>
@@ -677,7 +678,7 @@ export default function DeliberationUI() {
         </div>
 
         {/* 主体内容 */}
-        <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', gap: 20 }}>
+        <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: isSmall ? '12px' : '20px', display: 'flex', flexDirection: isSmall ? 'column' : 'row', gap: isSmall ? 12 : 20 }}>
           {/* 左侧：推演内容 */}
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* 输入区 */}
@@ -947,8 +948,8 @@ export default function DeliberationUI() {
             )}
           </div>
 
-          {/* 右侧：推演图谱 + 节点详情 */}
-          {session && (
+          {/* 右侧：推演图谱（手机端隐藏，避免遮挡打字区） */}
+          {session && !isSmall && (
             <div style={{ width: 480, flexShrink: 0 }}>
               <DeliberationGraph
                 session={session}

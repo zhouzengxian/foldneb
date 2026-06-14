@@ -488,21 +488,30 @@ function NebulaContent() {
     const speakNarration = (text, phase) => {
       // 停止上一段（音频 + TTS）
       const prev = narrationAudioRef.current;
-      if (prev) { prev.pause(); prev.src = ''; narrationAudioRef.current = null; }
+      if (prev) { prev.pause(); prev.src = ''; }
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       if (!S.narrationEnabled || !text) return;
 
       // 层1：预录制神经网络语音（晓晓，最高质量，离线可播）
       if (phase) {
         const base = import.meta.env.BASE_URL;
-        const audio = new Audio(`${base}narration/narration-${phase}.mp3`);
-        audio.volume = 1.0;
-        narrationAudioRef.current = audio;
-        audio.play().catch(() => {
-          // 加载/播放失败 → 回退浏览器 TTS
-          narrationAudioRef.current = null;
-          speakWithTTS(text);
-        });
+        // 复用同一个 Audio 元素，避免移动端每个 new Audio() 都需要用户手势
+        if (!narrationAudioRef.current) {
+          narrationAudioRef.current = new Audio();
+          narrationAudioRef.current.volume = 1.0;
+        }
+        const audio = narrationAudioRef.current;
+        audio.src = `${base}narration/narration-${phase}.mp3`;
+        audio.load();
+        audio.currentTime = 0;
+        const playPromise = audio.play();
+        if (playPromise) {
+          playPromise.catch(() => {
+            // 加载/播放失败 → 回退浏览器 TTS
+            narrationAudioRef.current = null;
+            speakWithTTS(text);
+          });
+        }
         return;
       }
       speakWithTTS(text);
@@ -514,7 +523,7 @@ function NebulaContent() {
     const tl = gsap.timeline({
       onComplete: () => {
         const prev = narrationAudioRef.current;
-        if (prev) { prev.pause(); narrationAudioRef.current = null; }
+        if (prev) { prev.pause(); if (prev.src) { URL.revokeObjectURL(prev.src); } prev.removeAttribute('src'); narrationAudioRef.current = null; }
         window.speechSynthesis?.cancel();
         stopAmbient();
         S.setDemoActive(false);
@@ -665,7 +674,7 @@ function NebulaContent() {
       demoTimelineRef.current = null;
     }
     const narr = narrationAudioRef.current;
-    if (narr) { narr.pause(); narrationAudioRef.current = null; }
+    if (narr) { narr.pause(); narr.src = ''; narrationAudioRef.current = null; }
     const S = useNebulaStore.getState();
     window.speechSynthesis?.cancel();
     stopAmbient();

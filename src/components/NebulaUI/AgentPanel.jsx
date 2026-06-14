@@ -23,9 +23,11 @@ export default function AgentPanel({ onOpenArchive }) {
   ).length;
   const sameDistrictAgents = tier1Agents.filter((a) => a.district === agent.district && a.id !== agent.id);
 
+  const isSmall = typeof window !== 'undefined' && window.innerWidth < 600;
+
   return (
-    <div style={{ position: 'absolute', right: 24, top: '50%', transform: 'translateY(-50%)', width: 380, background: 'rgba(5,5,32,0.92)', backdropFilter: 'blur(24px)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', padding: '16px 18px', pointerEvents: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.5)', color: '#e8f0ff', maxHeight: '88vh', overflowY: 'auto', fontSize: 12, lineHeight: 1.6 }}>
-      <button onClick={deselectAgent} style={{ position: 'absolute', top: 12, right: 14, background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', fontSize: 18, padding: 2, lineHeight: 1 }}>✕</button>
+    <div style={{ position: 'absolute', right: isSmall ? 4 : 24, top: '50%', transform: 'translateY(-50%)', width: isSmall ? '96vw' : 380, maxWidth: isSmall ? '96vw' : 380, background: 'rgba(5,5,32,0.92)', backdropFilter: 'blur(24px)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', padding: '16px 18px', pointerEvents: 'auto', zIndex: 55, boxShadow: '0 8px 40px rgba(0,0,0,0.5)', color: '#e8f0ff', maxHeight: '88vh', overflowY: 'auto', fontSize: 12, lineHeight: 1.6 }}>
+      <button onClick={deselectAgent} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', color: '#ccd', cursor: 'pointer', fontSize: 20, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>✕</button>
 
       {/* Agent 头像 + 基本信息 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
