@@ -9,45 +9,57 @@
 ## 系统架构
 
 ```mermaid
-graph TB
-    ENTRY["🚀 main.jsx → App.jsx · 路由调度"]
+flowchart TB
+    ENTRY["🚀 入口 · main.jsx → App.jsx"]
+    ENTRY --> SCENE & PANELS & VIZ
 
-    ENTRY --> L1
-
-    subgraph L1["🖥️ 表现层"]
+    subgraph SCENE["🌌 3D 星河 · Three.js"]
         direction LR
-        N1["🌌 3D 星河<br/>NebulaScene · AgentNode · CloneNode<br/>GrowingLines · ConnectionLines · Starfield"]
-        N2["🖥️ 2D 面板<br/>NebulaUI · PhoneApp · DeliberationUI<br/>CloneCreator · CustomCloneChat · TemporalDeliberation"]
-        N3["📊 可视化子图<br/>DeliberationGraph<br/>MemoryGraph · TimelineGraph"]
+        s1["NebulaScene<br/>场景容器"]
+        s2["AgentNode<br/>思想星体"]
+        s3["CustomCloneNode<br/>用户分身"]
+        s4["GrowingLines<br/>生长藤蔓"]
+        s5["ConnectionLines<br/>归属连线"]
+        s6["Starfield<br/>星空背景"]
     end
 
-    L1 --> L2
-
-    subgraph L2["🐻 状态层"]
-        S1["Zustand useNebulaStore<br/>全局状态 · localStorage 持久化"]
-        S2["useForceGraph<br/>力导向布局引擎"]
+    subgraph PANELS["🖥️ 2D 面板 · React"]
+        direction LR
+        p1["NebulaUI<br/>主界面"]
+        p2["PhoneApp<br/>朋友圈"]
+        p3["DeliberationUI<br/>决策推演"]
+        p4["TemporalDelib<br/>时间折叠"]
+        p5["CloneCreator<br/>分身创建"]
+        p6["CustomCloneChat<br/>分身对话"]
     end
 
-    L2 --> L3
-
-    subgraph L3["⚙️ 引擎层 · 7 大引擎"]
+    subgraph VIZ["📊 可视化子图"]
         direction LR
-        E1["🧬 deliberation<br/>多视角决策"]
-        E2["⏱️ temporal<br/>时间折叠"]
-        E3["🔀 fork<br/>分叉对比"]
-        E4["🔎 causalTrace<br/>因果回溯"]
-        E5["🤖 replyEngine<br/>统一回复 · 三级降级"]
-        E6["📚 imaClient<br/>腾讯知识库"]
-        E7["🎛️ modelConfig<br/>多模型调度"]
+        v1["DeliberationGraph<br/>推演力图"]
+        v2["MemoryGraph<br/>记忆图谱"]
+        v3["TimelineGraph<br/>时间线视图"]
     end
 
-    L3 --> L4
+    SCENE & PANELS & VIZ --> STORE
 
-    subgraph L4["💾 数据层"]
+    subgraph STATE["🐻 状态层"]
+        STORE["Zustand · useNebulaStore<br/>全局状态 + localStorage 持久化"]
+        FORCE["useForceGraph<br/>力导向布局引擎"]
+    end
+
+    STATE --> BOTTOM
+
+    subgraph BOTTOM["⚙️ 引擎与数据层"]
         direction LR
-        D1["👤 用户数据<br/>friends · clone · 对话"]
-        D2["📦 静态预设<br/>125位思想者 · 朋友圈语料"]
-        D3["☁️ 外部服务<br/>LLM APIs · ima · Obsidian"]
+        subgraph ENGINE["⚙️ 引擎层 · 7 大引擎"]
+            direction TB
+            e1["🧬 deliberationEngine<br/>多视角决策"] ~~~ e2["⏱️ temporalEngine<br/>时间折叠"] ~~~ e3["🔀 forkEngine<br/>分叉对比"] ~~~ e4["🔎 causalTrace<br/>因果回溯"] ~~~ e5["🤖 agentReplyEngine<br/>统一回复 · 三级降级"] ~~~ e6["📚 imaClient<br/>腾讯知识库接入"] ~~~ e7["🎛️ modelConfig<br/>多模型调度中心"]
+        end
+        ENGINE --> DATA
+        subgraph DATA["💾 数据层"]
+            direction TB
+            d1["👤 用户数据<br/>friends · clone · 对话"] ~~~ d2["📦 静态预设<br/>125 位思想者 · 朋友圈语料"] ~~~ d3["☁️ 外部服务<br/>LLM APIs · ima · Obsidian"]
+        end
     end
 ```
 
