@@ -391,7 +391,7 @@ export default function NebulaUI() {
               marginBottom: 8, fontWeight: 600, letterSpacing: '0.05em',
               transition: 'all 0.2s',
             }}>
-              📄 查看完整档案
+              {agent.bio ? '📖 查看深度档案' : '📄 查看完整档案'}
             </button>
           )}
 
@@ -504,29 +504,193 @@ export default function NebulaUI() {
               </div>
             </div>
 
-            {/* 简介 */}
+            {/* 一句话简介（原有 description 字段） */}
             {agent.description && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: '#FFD700', opacity: 0.6, marginBottom: 6, letterSpacing: '0.1em' }}>简介</div>
-                <p style={{ fontSize: 13, lineHeight: 1.8, color: '#bbccdd', margin: 0 }}>{agent.description}</p>
+              <div style={{
+                marginBottom: 18, padding: '12px 14px',
+                background: `${agent.color}10`, borderRadius: 10,
+                borderLeft: `3px solid ${agent.color}88`,
+              }}>
+                <p style={{ fontSize: 13, lineHeight: 1.7, color: '#bbccdd', margin: 0 }}>{agent.description}</p>
               </div>
             )}
 
-            {/* 经典语录 */}
-            {agent.dialogue && (
+            {/* ===== 完整传记（深度档案：bio，多段落）===== */}
+            {agent.bio && agent.bio.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{
+                  fontSize: 11, color: agent.color, marginBottom: 10,
+                  letterSpacing: '0.15em', fontWeight: 600, opacity: 0.9,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 3, height: 12, background: agent.color, borderRadius: 2 }} />
+                  完整传记 · BIOGRAPHY
+                </div>
+                {agent.bio.map((p, i) => (
+                  <p key={i} style={{
+                    fontSize: 12.5, lineHeight: 1.85, color: '#c5d0e0', margin: '0 0 10px 0',
+                    textIndent: '1.8em',
+                  }}>{p}</p>
+                ))}
+              </div>
+            )}
+
+            {/* ===== 人生时间轴（深度档案：timeline） ===== */}
+            {agent.timeline && agent.timeline.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{
+                  fontSize: 11, color: agent.color, marginBottom: 12,
+                  letterSpacing: '0.15em', fontWeight: 600, opacity: 0.9,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 3, height: 12, background: agent.color, borderRadius: 2 }} />
+                  人生里程碑 · TIMELINE
+                </div>
+                <div style={{ position: 'relative', paddingLeft: 16 }}>
+                  {/* 垂直线 */}
+                  <div style={{
+                    position: 'absolute', left: 5, top: 4, bottom: 4,
+                    width: 1, background: `${agent.color}33`,
+                  }} />
+                  {agent.timeline.map((item, i) => (
+                    <div key={i} style={{ position: 'relative', marginBottom: 10 }}>
+                      {/* 节点圆 */}
+                      <div style={{
+                        position: 'absolute', left: -16, top: 4,
+                        width: 9, height: 9, borderRadius: '50%',
+                        background: agent.color, boxShadow: `0 0 8px ${agent.color}88`,
+                      }} />
+                      <div style={{ fontSize: 11, color: agent.color, fontWeight: 600, marginBottom: 2 }}>
+                        {item.year}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#b8c4d8', lineHeight: 1.6 }}>{item.event}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ===== 核心思想/方法论（深度档案：philosophy） ===== */}
+            {agent.philosophy && agent.philosophy.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{
+                  fontSize: 11, color: agent.color, marginBottom: 12,
+                  letterSpacing: '0.15em', fontWeight: 600, opacity: 0.9,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 3, height: 12, background: agent.color, borderRadius: 2 }} />
+                  核心思想 · PHILOSOPHY
+                </div>
+                {agent.philosophy.map((ph, i) => (
+                  <div key={i} style={{
+                    marginBottom: 10, padding: '12px 14px',
+                    background: 'rgba(255,255,255,0.025)', borderRadius: 10,
+                    border: `1px solid ${agent.color}1a`,
+                  }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#e8f0ff', marginBottom: 5 }}>
+                      {i + 1}. {ph.title}
+                    </div>
+                    <div style={{ fontSize: 11.5, lineHeight: 1.75, color: '#aabbcc' }}>{ph.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ===== 多条经典语录（深度档案：quotes，替代原 dialogue 单条） ===== */}
+            {agent.quotes && agent.quotes.length > 0 ? (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{
+                  fontSize: 11, color: agent.color, marginBottom: 12,
+                  letterSpacing: '0.15em', fontWeight: 600, opacity: 0.9,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 3, height: 12, background: agent.color, borderRadius: 2 }} />
+                  经典语录 · QUOTES
+                </div>
+                {agent.quotes.map((q, i) => (
+                  <div key={i} style={{
+                    marginBottom: 8, padding: '11px 14px',
+                    background: 'rgba(255,255,255,0.03)', borderRadius: 10,
+                    borderLeft: `3px solid ${agent.color}88`,
+                  }}>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.8, color: '#d8e2f0', fontStyle: 'italic' }}>
+                      "{q.text}"
+                    </div>
+                    {q.context && (
+                      <div style={{ fontSize: 10, color: '#7788aa', marginTop: 6, lineHeight: 1.5 }}>
+                        —— {q.context}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : agent.dialogue ? (
+              /* 普通档案 fallback：单条 dialogue */
               <div style={{
-                marginBottom: 16, padding: '14px 16px',
+                marginBottom: 18, padding: '14px 16px',
                 background: 'rgba(255,255,255,0.03)', borderRadius: 12,
-                borderLeft: `3px solid ${agent.color}66`,
+                borderLeft: `3px solid ${agent.color}88`,
               }}>
                 <div style={{ fontSize: 10, color: '#FFD700', opacity: 0.6, marginBottom: 6, letterSpacing: '0.1em' }}>经典语录</div>
                 <div style={{ fontSize: 13, lineHeight: 1.85, color: '#d0dae8', fontStyle: 'italic' }}>
                   "{agent.dialogue}"
                 </div>
               </div>
+            ) : null}
+
+            {/* ===== 代表作/产品（深度档案：works） ===== */}
+            {agent.works && agent.works.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{
+                  fontSize: 11, color: agent.color, marginBottom: 12,
+                  letterSpacing: '0.15em', fontWeight: 600, opacity: 0.9,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 3, height: 12, background: agent.color, borderRadius: 2 }} />
+                  代表作与产品 · WORKS
+                </div>
+                {agent.works.map((w, i) => (
+                  <div key={i} style={{
+                    display: 'flex', gap: 12, marginBottom: 8, padding: '10px 12px',
+                    background: 'rgba(255,255,255,0.02)', borderRadius: 10,
+                    border: '1px solid rgba(255,255,255,0.05)',
+                  }}>
+                    <div style={{
+                      flexShrink: 0, fontSize: 10, padding: '3px 8px',
+                      borderRadius: 6, background: `${agent.color}1a`,
+                      color: agent.color, fontWeight: 600, height: 'fit-content',
+                    }}>{w.year}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, color: '#e0e8f5', fontWeight: 500, marginBottom: 3 }}>
+                        {w.name} <span style={{ fontSize: 10, color: '#7788aa', fontWeight: 400 }}>· {w.type}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#99aabb', lineHeight: 1.6 }}>{w.note}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
 
-            {/* 关键成就 */}
+            {/* ===== 影响与启示（深度档案：legacy） ===== */}
+            {agent.legacy && (
+              <div style={{
+                marginBottom: 18, padding: '16px 18px',
+                background: `linear-gradient(135deg, ${agent.color}12, ${agent.color}05)`,
+                borderRadius: 14, border: `1px solid ${agent.color}25`,
+              }}>
+                <div style={{
+                  fontSize: 11, color: agent.color, marginBottom: 10,
+                  letterSpacing: '0.15em', fontWeight: 600, opacity: 0.9,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 3, height: 12, background: agent.color, borderRadius: 2 }} />
+                  影响与启示 · LEGACY
+                </div>
+                <p style={{ fontSize: 12.5, lineHeight: 1.85, color: '#cad4e2', margin: 0 }}>{agent.legacy}</p>
+              </div>
+            )}
+
+            {/* 关键成就（原有 highlights 字段） */}
             {agent.highlights && agent.highlights.length > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, color: '#FFD700', opacity: 0.6, marginBottom: 6, letterSpacing: '0.1em' }}>关键成就</div>
