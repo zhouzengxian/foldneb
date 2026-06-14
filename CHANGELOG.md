@@ -1,5 +1,68 @@
 # Changelog · FoldNeb 折叠星云
 
+## V4.9 — 开发进度 90% + 「开发中」收纳文件夹 + 巡游默认静音 (2026-06-14)
+
+工具栏按钮过多，未完善功能（旁白/截图/场景Demo/调试）干扰主流程。本版本做收纳 + 静音：右上角新增橙色「开发中」下拉文件夹，工具栏精简为 4 个主流程按钮，星河巡游默认不播放声音。
+
+### 核心改动
+
+#### 1. 开发进度条 84% → 90%（`NebulaUI/DevProgressBar.jsx`）
+- 像素点亮数 `i < 8` → `i < 9`，head 位置 `i === 7` → `i === 8`，文案 `84%` → `90%`
+
+#### 2. 新建「开发中」收纳文件夹（`NebulaUI/DevFolder.jsx`）
+- 右上角橙色「🚧 开发中 ▼」下拉按钮（`position: fixed; top: 24; right: 24`）
+- 收纳 4 项：🔇/🔊 旁白（toggleNarration）/ 📸 截图（takeScreenshot，成功后 1.6s 自动收起）/ 🎬 场景 Demo（回调打开 ScenarioDemos）/ 🔧 调试（回调打开 DebugPanel）
+- 点击外部自动收起（mousedown + ref contains）
+
+#### 3. 工具栏精简（`NebulaUI.jsx`）
+- 移除 3 个按钮：🎬 场景 Demo / 📸 截图 / 🔇 旁白
+- 移除对应 store 订阅（narrationEnabled / toggleNarration / takeScreenshot / screenshotReady）
+- 保留主流程：✨ 星河巡游 / 🪐 创建分身 / 🗂️ 十三星系 / 🔍 搜索
+
+#### 4. DebugPanel 重构为受控组件（`NebulaUI/DebugPanel.jsx`）
+- 删除自带触发按钮，改为接受 `open` / `onClose` props
+- 由 DevFolder 的「🔧 调试」项触发，NebulaUI 统一管理 `debugPanelOpen` state
+
+#### 5. 星河巡游默认静音（`store/useNebulaStore.js`）
+- `narrationEnabled` 默认值 `true` → `false`
+- 语音旁白 TTS 效果未调好，默认关闭；用户仍可从「开发中」文件夹手动开启
+
+### 取舍决策
+| ✅ 做 | ❌ 不做 |
+|-------|---------|
+| 未完善功能收纳到右上角文件夹 | 直接删除旁白/截图功能（后续要调） |
+| DebugPanel 改受控，统一开关态 | 保留 DebugPanel 自带按钮（会和文件夹重复） |
+| narrationEnabled 全局默认 false | 仅在 runDemo 内禁音（用户巡游外也想静音） |
+
+---
+
+## V4.8 — 转场精简 + autoStart 修复 (2026-06-14)
+
+本版本是对 V4.7「双场景 Demo 横纵联动」的衔接性能修复。Demo 完成后的转场动画被移除，改为直接面板切换，autoStart 链路从异步打字机改为同步赋值 + setTimeout 启动。
+
+### 核心改动
+
+#### 1. 删除转场动画组件（`DeliberationTransition.jsx` 不再渲染，文件保留）
+- `DeliberationUI.jsx`：移除 `import DeliberationTransition`、移除 `showTunnel` state、移除两处 `{showTunnel && <DeliberationTransition />}` 渲染
+- `handleLaunchTemporal` 简化：`closeDeliberation()` → `clearDeliberationAutoChain()` → `openTemporalWithPrefill(prefill, { autoStart })`，三行同步调用，无 setTimeout/隧道延迟
+
+#### 2. TemporalDeliberation autoStart 链路简化
+- 移除 `typeProfileField` 异步打字机回调（`src/components/TemporalDeliberation.jsx` 第 77-92 行）
+- autoStart IIIF 从「逐字段打字 + sleep → startRef」改为「`setProfile` 直接赋值 → `setTimeout(150ms)` → `startRef.current()`」
+- effect 依赖数组移除 `typeProfileField`
+
+### 已知问题
+⚠️ **场景 Demo → 时间折叠自动衔接偶尔不触发**：`startRef` 闭包与 React 状态更新时序存在竞态，150ms setTimeout 可能不够可靠。面板能正常打开+预填，但折叠不自动开始。下一版本需用 zustand 订阅或 `flushSync` 彻底解决。
+
+### 取舍决策
+| ✅ 做 | ❌ 不做 |
+|-------|---------|
+| 移除转场动画，改为直接衔接 | 追查 autoStart 深层竞态（先确保面板打开畅通） |
+| 简化 autoStart 为同步赋值 + setTimeout | 重写 startTemporal 签名（改动太大） |
+| 保留 `DeliberationTransition.jsx` 源文件 | 删除文件（可能后续恢复） |
+
+---
+
 ## V4.7 — 知识资产价值面板 + 商业叙事立柱 (2026-06-14)
 
 本版本是**黑客松收尾档**：把「知识星图市场 — AI 时代知识交易平台雏形」这个叙事彻底立住。底层基础设施（分身/星球/推演/朋友圈/Obsidian）已全部就位，本版本只做**叙事点破 + 价值可视化**，不再加新大功能（守住「尖锐卖点 × 极致完成度」原则）。

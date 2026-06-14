@@ -442,6 +442,7 @@ function NebulaContent() {
 
   // Demo 飞行
   const originCamRef = useRef(null);
+  const demoTimelineRef = useRef(null);
   const { camera } = useThree();
   const cameraRef = useRef(camera);
 
@@ -479,6 +480,9 @@ function NebulaContent() {
       window.speechSynthesis.speak(u);
     };
 
+    // 音效统一受 narrationEnabled 控制：不朗读时静音
+    const playSfx = (fn) => { if (S.narrationEnabled) fn(); };
+
     const tl = gsap.timeline({
       onComplete: () => {
         window.speechSynthesis?.cancel();
@@ -490,8 +494,10 @@ function NebulaContent() {
         S.setDemoShowPhone(false);
         S.setDemoShowDeliberation(false);
         S.clearFocus();
+        demoTimelineRef.current = null;
       },
     });
+    demoTimelineRef.current = tl;
 
     // ===== Phase 1: 混沌初开 (0-7s) — 粒子聚合 + 环境音 =====
     tl.to(cam.position, { x: 0, y: 8, z: 15, duration: 3, ease: 'power2.inOut',
@@ -500,10 +506,10 @@ function NebulaContent() {
         S.setDemoHighlight(null);
         S.setDemoSubtitle('如果改变世界的 125 个大脑，都在同一片天空……');
         speakNarration('如果改变世界的 125 个大脑，都在同一片天空……');
-        // 粒子聚合音效 + 环境音启动
-        playConvergeWhoosh();
-        initAudio();
-        setTimeout(() => startAmbient(), 500);
+        // 粒子聚合音效 + 环境音启动（受 narrationEnabled 控制）
+        playSfx(playConvergeWhoosh);
+        playSfx(initAudio);
+        playSfx(() => setTimeout(startAmbient, 500));
       },
     });
     tl.to({}, { duration: 4 }); // 让粒子聚合效果播放充分
@@ -514,7 +520,7 @@ function NebulaContent() {
         S.setDemoPhase(2);
         S.setDemoSubtitle('AI前沿、认知决策、思想源流——黄仁勋、马斯克、王阳明、老子——跨越千年的思想者，化为发光星体');
         speakNarration('AI前沿、认知决策、思想源流。黄仁勋、马斯克、王阳明、老子，跨越千年的思想者，化为发光星体');
-        playWhoosh();
+        playSfx(playWhoosh);
       },
     });
     // 环绕半圈
@@ -536,7 +542,7 @@ function NebulaContent() {
         focusAgent(jensen.id);
         S.setDemoSubtitle('轻触任何一颗星，就能听到他们的思想。搜索、定位、对话——知识活了');
         speakNarration('轻触任何一颗星，就能听到他们的思想。搜索、定位、对话，知识活了');
-        playDing();
+        playSfx(playDing);
         setTimeout(() => S.showDialogueBubble(jensen.id), 2200);
       },
     });
@@ -550,7 +556,7 @@ function NebulaContent() {
         S.setDemoHighlight(wangym.id);
         focusAgent(wangym.id);
         S.hideDialogueBubble();
-        playDing();
+        playSfx(playDing);
         setTimeout(() => S.showDialogueBubble(wangym.id), 2200);
       },
     });
@@ -563,7 +569,7 @@ function NebulaContent() {
         S.setDemoSubtitle('思想者还有朋友圈——点赞、评论、自动回复，社交化Agent互动');
         speakNarration('思想者还有朋友圈。点赞、评论、自动回复，社交化Agent互动');
         S.setDemoShowPhone(true);
-        playWhoosh();
+        playSfx(playWhoosh);
         setTimeout(() => S.setDemoShowPhone(false), 1800);
       },
     });
@@ -592,7 +598,7 @@ function NebulaContent() {
         S.setDemoSubtitle('支持多Agent决策推演——思想者为你出谋划策，生成结构化报告');
         speakNarration('支持多Agent决策推演。思想者为你出谋划策，生成结构化报告');
         S.setDemoShowDeliberation(true);
-        playWhoosh();
+        playSfx(playWhoosh);
         setTimeout(() => S.setDemoShowDeliberation(false), 1800);
       },
     });
@@ -610,10 +616,30 @@ function NebulaContent() {
     tl.to({}, { duration: 7 }); // 收尾全景 + Logo + 数据展示
   }, [demoActive]);
 
-  // 注册 runDemo 到 store，供 NebulaUI 调用
+  // 跳过/强制结束巡游
+  const stopDemo = useCallback(() => {
+    const tl = demoTimelineRef.current;
+    if (tl) {
+      tl.kill();
+      demoTimelineRef.current = null;
+    }
+    const S = useNebulaStore.getState();
+    window.speechSynthesis?.cancel();
+    stopAmbient();
+    S.setDemoActive(false);
+    S.setDemoHighlight(null);
+    S.setDemoSubtitle('');
+    S.setDemoPhase(0);
+    S.setDemoShowPhone(false);
+    S.setDemoShowDeliberation(false);
+    S.hideDialogueBubble?.();
+    S.clearFocus();
+  }, []);
+
+  // 注册 runDemo / stopDemo 到 store，供 NebulaUI 调用
   useEffect(() => {
-    useNebulaStore.setState({ runDemo });
-  }, [runDemo]);
+    useNebulaStore.setState({ runDemo, stopDemo });
+  }, [runDemo, stopDemo]);
 
   // 动态连线（从 memories 推导，用户连线仅显示好友）
   const dynamicConns = useMemo(() => {

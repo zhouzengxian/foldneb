@@ -11,7 +11,11 @@ import DeliberationGraph from './DeliberationGraph';
 import DeliberationHistory from './DeliberationHistory';
 import DEMOS from '../utils/deliberationDemos';
 import { generateReportImage, downloadReportImage } from '../utils/reportImage';
-import { tier1Agents } from '../data/gameData';
+import TriggerButtons from './DeliberationUI/TriggerButtons.jsx';
+import RoundsList from './DeliberationUI/RoundsList.jsx';
+import ReportView from './DeliberationUI/ReportView.jsx';
+import NodeDetailPanel from './DeliberationUI/NodeDetailPanel.jsx';
+
 
 // 预设典型问题（一人公司创始人场景）
 const PRESET_PROBLEMS = [
@@ -86,12 +90,14 @@ export default function DeliberationUI() {
     deliberationHistory, deliberationHistoryView,
     openDeliberationHistoryView, closeDeliberationHistoryView,
     openTemporal, openTemporalWithPrefill,
+    deliberationPrefill, clearDeliberationPrefill,
+    deliberationAutoChain, clearDeliberationAutoChain,
   } = useNebulaStore();
 
   const [problem, setProblem] = useState('');
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [mode, setMode] = useState('api'); // 'api' | 'demo'
+  const [mode, setMode] = useState('demo'); // 'api' | 'demo'（默认 demo，开箱即用）
   const [modelProvider, setModelProviderLocal] = useState(() => getDeliberationProvider());
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -101,10 +107,22 @@ export default function DeliberationUI() {
   const [wasCancelled, setWasCancelled] = useState(false);
   const [credsTick, setCredsTick] = useState(0); // 保存后刷新预览
   const [selectedNode, setSelectedNode] = useState(null); // 图谱选中的节点
+
   const abortRef = useRef(false);
   const demoRunningRef = useRef(false);
-  const modeRef = useRef('api');
+  const modeRef = useRef('demo');
   const runDemoRef = useRef(null);
+  const scrollRef = useRef(null); // 主体内容滚动容器（打字时自动跟随）
+
+  // 把主体内容容器滚动到底部（Demo 打字时跟随新内容；结束时滑到「带入时间折叠」按钮）
+  const scrollContentToBottom = useCallback((smooth = true) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  }, []);
 
   // ===== 打字机效果 =====
   const [typedTexts, setTypedTexts] = useState({});
@@ -154,6 +172,20 @@ export default function DeliberationUI() {
 
   // 同步 mode 到 ref（避免 startDeliberation 闭包过期）
   useEffect(() => { modeRef.current = mode; }, [mode]);
+
+  // 吸收场景 Demo 入口预填的问题文本（V4.7）
+  // 仅在面板打开 + idle 状态吸收一次，吸收后切 Demo 模式 + 自动启动推演
+  useEffect(() => {
+    if (deliberationOpen && deliberationPhase === 'idle' && deliberationPrefill) {
+      setProblem(deliberationPrefill);
+      clearDeliberationPrefill();
+      setMode('demo');
+      // 延迟一帧确保 modeRef/problem 已生效后再触发 Demo
+      setTimeout(() => {
+        if (runDemoRef.current) runDemoRef.current();
+      }, 350);
+    }
+  }, [deliberationOpen, deliberationPhase, deliberationPrefill, clearDeliberationPrefill]);
 
   // 重置
   useEffect(() => {
@@ -368,13 +400,14 @@ export default function DeliberationUI() {
     setTimeout(() => openDeliberation(), 80);
   }, [archiveDeliberation, closeDeliberation, openDeliberation]);
 
-  // 把本次横向推演结果带入纵向时间折叠（剩余 10%：横纵联动入口）
-  const handleLaunchTemporal = useCallback(() => {
+  // 把本次横向推演结果带入纵向时间折叠（横纵联动入口）
+  // opts.autoStart=true 时，时间折叠面板收到 prefill 后自动开始（场景 Demo 用）
+  const handleLaunchTemporal = useCallback((opts = {}) => {
     const prefill = buildTemporalPrefillFromDeliberation(deliberationSession, userProfile?.name);
-    // 关闭决策推演面板，打开时间折叠面板并预填
     closeDeliberation();
-    setTimeout(() => openTemporalWithPrefill(prefill), 80);
-  }, [deliberationSession, userProfile, closeDeliberation, openTemporalWithPrefill]);
+    clearDeliberationAutoChain();
+    openTemporalWithPrefill(prefill, { autoStart: !!opts.autoStart });
+  }, [deliberationSession, userProfile, closeDeliberation, openTemporalWithPrefill, clearDeliberationAutoChain]);
 
   // ========== Demo 播放 ==========
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -426,8 +459,10 @@ export default function DeliberationUI() {
         // Demo：打字机 ~800ms 打完一句
         setTypedTexts(prev => ({ ...prev, [key]: '' }));
         addDeliberationDialogue(ri, d);
-        await typeText(key, d.text, 800);
+        await typeText(key, d.text, 350);
         addLog(`  ${d.agentName || d.agentId}: ${d.text.slice(0, 60)}…`);
+        // 打完一句，跟随滚动到这条卡片
+        scrollContentToBottom();
       }
 
       if (round.insights && round.insights.length > 0) {
@@ -450,6 +485,22 @@ export default function DeliberationUI() {
     setDeliberationReport(demo.report);
     addLog('✨ 推演完成！');
     demoRunningRef.current = false;
+
+    // 场景 Demo 自动衔接：推演播完后滚动到底部展示「带入时间折叠」按钮 →
+    // 短暂停留让观众读完报告结论 → 自动触发转场动画 → 带入时间折叠并 autoStart
+    if (useNebulaStore.getState().deliberationAutoChain) {
+      // 先平滑滚动到底，露出「带入时间折叠」按钮
+      setTimeout(() => scrollContentToBottom(true), 200);
+      // 停留 2.8s 让观众读到报告 → 自动跳转（等价于自动点击「带入时间折叠」）
+      // 复用 handleLaunchTemporal，保证手动/自动路径都走同一套转场动画
+      setTimeout(() => {
+        const cur = useNebulaStore.getState();
+        // 只在仍在 complete 阶段（用户没手动操作）且时间折叠未打开时自动跳
+        if (cur.deliberationPhase === 'complete' && !cur.temporalOpen) {
+          handleLaunchTemporal({ autoStart: true });
+        }
+      }, 3000);
+    }
   };
 
   // ========== 历史面板 ==========
@@ -464,39 +515,9 @@ export default function DeliberationUI() {
   if (!deliberationOpen) {
     // 触发按钮组（决策推演 + 时间折叠）
     return (
-      <div style={{
-        position: 'fixed', bottom: 8, right: 8, zIndex: 30,
-        display: 'flex', gap: 8,
-      }}>
-        <button
-          onClick={openTemporal}
-          title="时间折叠 · 与未来的自己对话"
-          style={{
-            background: 'linear-gradient(135deg, rgba(68,136,255,0.2), rgba(68,100,255,0.15))',
-            border: '1px solid rgba(68,136,255,0.4)',
-            borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
-            color: '#8cf', fontSize: '13px', fontFamily: 'system-ui',
-            fontWeight: 600, letterSpacing: '0.5px',
-            boxShadow: '0 0 20px rgba(68,136,255,0.1)',
-          }}
-        >
-          ⏳ 时间折叠
-        </button>
-        <button
-          onClick={openDeliberation}
-          title="决策推演"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,180,0,0.15))',
-            border: '1px solid rgba(255,215,0,0.35)',
-            borderRadius: '10px', padding: '8px 14px', cursor: 'pointer',
-            color: '#FFD700', fontSize: '13px', fontFamily: 'system-ui',
-            fontWeight: 600, letterSpacing: '0.5px',
-            boxShadow: '0 0 20px rgba(255,215,0,0.08)',
-          }}
-        >
-          ⚡ 决策推演
-        </button>
-      </div>
+      <>
+        <TriggerButtons />
+      </>
     );
   }
 
@@ -606,10 +627,10 @@ export default function DeliberationUI() {
                 ⚠ 需配置 Key
               </span>
             )}
-            {/* 历史按钮（idle 时显示） */}
-            {deliberationPhase === 'idle' && deliberationHistory.length > 0 && (
+            {/* 历史按钮（idle 时始终显示，无记录时点开看空态引导） */}
+            {deliberationPhase === 'idle' && (
               <button onClick={() => setShowHistory(true)} style={btnStyle('#8899cc')}>
-                📁 历史 ({deliberationHistory.length})
+                📁 历史{deliberationHistory.length > 0 ? ` (${deliberationHistory.length})` : ''}
               </button>
             )}
             {deliberationPhase === 'complete' && (
@@ -654,12 +675,24 @@ export default function DeliberationUI() {
         </div>
 
         {/* 主体内容 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', gap: 20 }}>
+        <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', gap: 20 }}>
           {/* 左侧：推演内容 */}
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* 输入区 */}
             {deliberationPhase === 'idle' && (
               <div style={{ padding: '10px 0' }}>
+                {mode === 'demo' && (
+                  <div style={{
+                    padding: '10px 14px', marginBottom: 12, borderRadius: '10px',
+                    background: 'linear-gradient(135deg, rgba(72,196,128,0.08), rgba(72,180,128,0.04))',
+                    border: '1px solid rgba(72,196,128,0.25)',
+                    color: '#8e8', fontSize: '12px', fontFamily: 'system-ui', lineHeight: 1.6,
+                  }}>
+                    🎬 <span style={{ fontWeight: 600 }}>演示模式</span> — 使用预置数据快速展示决策推演流程。
+                    切换到 <span style={{ color: '#acd', cursor: 'pointer', textDecoration: 'underline' }}
+                      onClick={() => setMode('api')}>🌐 API 模式</span> 使用真实大模型。
+                  </div>
+                )}
                 {/* API 配置面板（共享组件，时间折叠复用同一份） */}
                 {showApiSettings && mode === 'api' && (
                   <ApiSettingsPanel provider={modelProvider} onSaved={handleCredsSaved} />
@@ -824,135 +857,21 @@ export default function DeliberationUI() {
             )}
 
             {/* 推演轮次 */}
-            {session?.rounds?.map((round, ri) => (
-              <div key={ri} style={{
-                marginBottom: 16, padding: '14px 16px',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                borderRadius: '10px',
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-                  color: '#FFD700', fontSize: '13px', fontWeight: 600, fontFamily: 'system-ui',
-                }}>
-                  <span style={{
-                    background: 'rgba(255,215,0,0.15)', padding: '2px 8px',
-                    borderRadius: '8px', fontSize: '11px',
-                  }}>
-                    第{ri + 1}轮
-                  </span>
-                  {round.theme}
-                  <span style={{
-                    color: round.status === 'done' ? '#4A8' : '#889',
-                    fontSize: '10px', marginLeft: 'auto',
-                  }}>
-                    {round.status === 'done' ? '✓' : round.status === 'active' ? '…' : ''}
-                  </span>
-                </div>
-
-                {/* Agent 对话 */}
-                {round.dialogues?.map((d, di) => {
-                  const key = `${ri}-${d.agentId}`;
-                  const typed = typedTexts[key];
-                  const isTyping = typed !== undefined && typed !== d.text;
-                  return (
-                    <div key={di} style={{
-                      marginBottom: 8, padding: '10px 12px',
-                      background: 'rgba(255,255,255,0.03)',
-                      borderRadius: '8px', borderLeft: '2px solid rgba(255,215,0,0.2)',
-                    }}>
-                      <div style={{ color: '#FFD700', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 4 }}>
-                        {d.agentName || d.agentId}
-                        {isTyping && <span style={{ color: '#FFD700', fontSize: '10px', marginLeft: 6, opacity: 0.7 }}>▸ 输入中...</span>}
-                      </div>
-                      <div style={{ color: '#ccc', fontSize: '13px', fontFamily: 'system-ui', lineHeight: 1.6 }}>
-                        {typed !== undefined ? typed : d.text}
-                        {isTyping && <span style={{ animation: 'blink 0.8s step-end infinite', color: '#FFD700', fontWeight: 300 }}>|</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {round.status === 'pending' && (
-                  <div style={{ color: '#556', fontSize: '12px', fontFamily: 'system-ui', fontStyle: 'italic' }}>
-                    等待推演…
-                  </div>
-                )}
-              </div>
-            ))}
+            <RoundsList session={session} typedTexts={typedTexts} />
 
             {/* 报告 */}
             {deliberationPhase === 'complete' && session?.report && (
-              <div style={{
-                padding: '16px', marginTop: 8,
-                background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,180,0,0.05))',
-                border: '1px solid rgba(255,215,0,0.3)', borderRadius: '12px',
-              }}>
-                <div style={{ color: '#FFD700', fontSize: '15px', fontWeight: 700, fontFamily: 'system-ui', marginBottom: 14 }}>
-                  📋 推演报告
-                </div>
-
-                {/* 重新框定 */}
-                <ReportSection icon="🔄" label="重新框定" color="#E8D080">
-                  {session.report.reframedProblem}
-                </ReportSection>
-
-                {/* 核心发现 */}
-                <ReportSection icon="💡" label="核心发现" color="#FFD700">
-                  {session.report.coreFinding}
-                </ReportSection>
-
-                {/* 关键洞察 */}
-                {session.report.keyInsights?.length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 6 }}>
-                      🔑 关键洞察
-                    </div>
-                    {session.report.keyInsights.map((ins, i) => (
-                      <div key={i} style={{
-                        color: '#ccd', fontSize: '12px', fontFamily: 'system-ui',
-                        padding: '4px 0', paddingLeft: 12, borderLeft: '2px solid rgba(255,215,0,0.2)',
-                        marginBottom: 4,
-                      }}>
-                        {ins}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 可执行建议 */}
-                <ReportSection icon="🎯" label="行动建议" color="#80E8A0">
-                  {session.report.actionableAdvice}
-                </ReportSection>
-
-                {/* 后续可追问 */}
-                {session.report.followUpQuestions?.length > 0 && (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 6 }}>
-                      🤔 你可能还想问
-                    </div>
-                    {session.report.followUpQuestions.map((q, i) => (
-                      <div key={i} style={{
-                        color: '#99b', fontSize: '12px', fontFamily: 'system-ui',
-                        padding: '6px 10px', marginBottom: 4,
-                        background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
-                        cursor: 'pointer',
-                      }}
-                        onClick={() => {
-                          setProblem(q);
-                          archiveDeliberation();
-                          setTimeout(() => {
-                            useNebulaStore.getState().openDeliberation();
-                            setProblem(q);
-                          }, 100);
-                        }}
-                      >
-                        → {q}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ReportView
+                report={session.report}
+                onFollowUpQuestion={(q) => {
+                  setProblem(q);
+                  archiveDeliberation();
+                  setTimeout(() => {
+                    useNebulaStore.getState().openDeliberation();
+                    setProblem(q);
+                  }, 100);
+                }}
+              />
             )}
 
             {/* 开启新推演 + 带入时间折叠（横纵联动） */}
@@ -1036,69 +955,11 @@ export default function DeliberationUI() {
                 selectedNode={selectedNode}
               />
               {/* 节点详情面板 */}
-              {selectedNode && (() => {
-                if (selectedNode === 'user') {
-                  return (
-                    <div style={nodePanelStyle}>
-                      <div style={nodePanelHeadStyle}>
-                        <span style={{ color: '#FFD700', fontSize: '12px', fontWeight: 700 }}>🌟 提问者</span>
-                        <button onClick={() => setSelectedNode(null)} style={closeBtnStyle}>×</button>
-                      </div>
-                      <div style={{ color: '#ccd', fontSize: '12px', fontFamily: 'system-ui', lineHeight: 1.6 }}>
-                        {session.problem}
-                      </div>
-                    </div>
-                  );
-                }
-                const agent = tier1Agents.find(a => a.id === selectedNode);
-                if (!agent) return null;
-                const utterances = [];
-                (session.rounds || []).forEach((r, ri) => {
-                  (r.dialogues || []).forEach(d => {
-                    if (d.agentId === selectedNode) {
-                      utterances.push({ round: ri + 1, text: d.text, theme: r.theme });
-                    }
-                  });
-                });
-                return (
-                  <div style={nodePanelStyle}>
-                    <div style={{ ...nodePanelHeadStyle, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 8, marginBottom: 8 }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: agent.color, display: 'inline-block' }} />
-                        <span style={{ color: agent.color || '#ccd', fontSize: '12px', fontWeight: 700 }}>{agent.name}</span>
-                      </span>
-                      <button onClick={() => setSelectedNode(null)} style={closeBtnStyle}>×</button>
-                    </div>
-                    {agent.title && (
-                      <div style={{ color: '#889', fontSize: '10px', fontFamily: 'system-ui', marginBottom: 8 }}>
-                        {agent.title}
-                      </div>
-                    )}
-                    {utterances.length === 0 ? (
-                      <div style={{ color: '#556', fontSize: '11px', fontFamily: 'system-ui', fontStyle: 'italic' }}>
-                        等待发言…
-                      </div>
-                    ) : (
-                      <div style={{ maxHeight: 200, overflow: 'auto' }}>
-                        {utterances.map((u, i) => (
-                          <div key={i} style={{
-                            marginBottom: 8, padding: '8px 10px',
-                            background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
-                            borderLeft: `2px solid ${agent.color}55`,
-                          }}>
-                            <div style={{ color: '#667', fontSize: '9px', fontFamily: 'system-ui', marginBottom: 3 }}>
-                              R{u.round} · {u.theme}
-                            </div>
-                            <div style={{ color: '#ccc', fontSize: '11.5px', fontFamily: 'system-ui', lineHeight: 1.55 }}>
-                              {u.text}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              <NodeDetailPanel
+                session={session}
+                selectedNode={selectedNode}
+                onClose={() => setSelectedNode(null)}
+              />
             </div>
           )}
         </div>
@@ -1108,23 +969,6 @@ export default function DeliberationUI() {
 }
 
 // ========== 小组件 ==========
-function ReportSection({ icon, label, color, children }) {
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 600, fontFamily: 'system-ui', marginBottom: 4 }}>
-        {icon} {label}
-      </div>
-      <div style={{
-        color: color || '#ccd', fontSize: '13px', fontFamily: 'system-ui',
-        lineHeight: 1.6, padding: '6px 10px',
-        background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
-      }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function btnStyle(color) {
   return {
     background: 'rgba(255,255,255,0.05)', border: `1px solid ${color}33`,
@@ -1132,23 +976,3 @@ function btnStyle(color) {
     color: color, fontSize: '12px', fontFamily: 'system-ui',
   };
 }
-
-// 节点详情面板样式
-const nodePanelStyle = {
-  marginTop: 10,
-  padding: '10px 12px',
-  background: 'rgba(6,6,18,0.6)',
-  border: '1px solid rgba(255,215,0,0.12)',
-  borderRadius: '10px',
-};
-
-const nodePanelHeadStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-};
-
-const closeBtnStyle = {
-  background: 'none', border: 'none', color: '#666',
-  cursor: 'pointer', fontSize: 16, padding: '0 4px', lineHeight: 1,
-};

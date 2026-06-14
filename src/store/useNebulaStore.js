@@ -133,9 +133,11 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   deliberationOpen: false,
   deliberationPhase: 'idle',
+  deliberationPrefill: null, // 场景 Demo 入口预填的问题文本（被 DeliberationUI 吸收后清空）
   deliberationSession: null,
   deliberationHistory: loadFromStorage('deliberationHistory', []),
   deliberationHistoryView: null,
+  deliberationAutoChain: false, // 场景 Demo：推演播完后自动衔接时间折叠
 
   // ========================================
   // 时间折叠系统（纵向时间轴推演）
@@ -144,6 +146,9 @@ const useNebulaStore = create((set, get) => ({
   temporalPhase: 'idle', // idle|generating|writing|reviewing|anchoring|complete
   temporalSession: null, // { profile, selves, letters, crossReviews, matrix }
   temporalPrefill: null, // 从决策推演带入的预填 profile（被 TemporalDeliberation 吸收后清空）
+  temporalAutoStart: false, // 场景 Demo：收到 prefill 后自动开始折叠（不需手动点）
+  temporalHistory: loadFromStorage('temporalHistory', []),
+  temporalHistoryView: null,
 
   // ========================================
   // 自定义分身 Agent（custom_clone）
@@ -161,8 +166,9 @@ const useNebulaStore = create((set, get) => ({
   demoHighlight: null,
   demoSubtitle: '',
   demoPhase: 0,
-  narrationEnabled: true,
+  narrationEnabled: false,
   runDemo: null,
+  stopDemo: null,
   demoShowPhone: false,
   demoShowDeliberation: false,
 
@@ -514,6 +520,17 @@ const useNebulaStore = create((set, get) => ({
   // Actions: 决策推演
   // ========================================
   openDeliberation: () => set({ deliberationOpen: true }),
+  // 场景 Demo 入口：打开决策推演面板并预填问题文本（自动切 Demo 模式）
+  // autoChain=true 表示推演播完后自动衔接时间折叠（创业者 Demo 用）
+  openDeliberationWithPrefill: (text, { autoChain = false } = {}) => set({
+    deliberationOpen: true,
+    deliberationPhase: 'idle',
+    deliberationSession: null,
+    deliberationPrefill: text || null,
+    deliberationAutoChain: !!autoChain,
+  }),
+  clearDeliberationAutoChain: () => set({ deliberationAutoChain: false }),
+  clearDeliberationPrefill: () => set({ deliberationPrefill: null }),
   closeDeliberation: () => set({ deliberationOpen: false, deliberationPhase: 'idle' }),
   setDeliberationPhase: (phase) => set({ deliberationPhase: phase }),
   setDeliberationSession: (session) => set({ deliberationSession: session }),
@@ -602,18 +619,44 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   openTemporal: () => set({ temporalOpen: true }),
   // 从决策推演带 profile 进入时间折叠：重置 session + 写入预填 + 打开面板
-  openTemporalWithPrefill: (prefill) => set({
+  // autoStart=true 表示收到 prefill 后自动开始折叠（场景 Demo 用）
+  openTemporalWithPrefill: (prefill, { autoStart = false } = {}) => set({
     temporalOpen: true,
     temporalPhase: 'idle',
     temporalSession: null,
     temporalPrefill: prefill || null,
+    temporalAutoStart: !!autoStart,
   }),
+  clearTemporalAutoStart: () => set({ temporalAutoStart: false }),
   clearTemporalPrefill: () => set({ temporalPrefill: null }),
   closeTemporal: () => set({ temporalOpen: false, temporalPhase: 'idle', temporalSession: null, temporalPrefill: null }),
   setTemporalPhase: (phase) => set({ temporalPhase: phase }),
   setTemporalSession: (session) => set({ temporalSession: session }),
   patchTemporalSession: (patch) =>
     set((s) => ({ temporalSession: { ...(s.temporalSession || {}), ...patch } })),
+
+  // 时间折叠历史记录
+  archiveTemporal: () => {
+    const { temporalSession, temporalHistory } = get();
+    if (!temporalSession) return;
+    const newHistory = [
+      { ...temporalSession, id: `t_${Date.now()}`, archivedAt: Date.now() },
+      ...temporalHistory,
+    ];
+    set({ temporalHistory: newHistory, temporalSession: null, temporalPhase: 'idle' });
+    saveToStorage('temporalHistory', newHistory);
+  },
+  deleteTemporal: (id) => {
+    const newHistory = get().temporalHistory.filter(h => h.id !== id);
+    set({ temporalHistory: newHistory });
+    saveToStorage('temporalHistory', newHistory);
+  },
+  clearTemporalHistory: () => {
+    set({ temporalHistory: [], temporalHistoryView: null });
+    saveToStorage('temporalHistory', []);
+  },
+  openTemporalHistoryView: (view) => set({ temporalHistoryView: view, temporalOpen: true }),
+  closeTemporalHistoryView: () => set({ temporalHistoryView: null }),
 
   // ========================================
   // Actions: 自定义分身 Agent

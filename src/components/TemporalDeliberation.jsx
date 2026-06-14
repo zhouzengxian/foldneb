@@ -14,6 +14,8 @@ import {
   SectionTitle, btn,
 } from './TemporalSubViews';
 import TimelineGraph from './TimelineGraph';
+import TimeTunnel from './TimeTunnel';
+import TemporalHistory from './TemporalHistory';
 
 const PHASES = {
   idle:       { label: '准备折叠',     icon: '⏳' },
@@ -45,34 +47,86 @@ export default function TemporalDeliberation() {
     temporalOpen, temporalPhase, temporalSession,
     closeTemporal, setTemporalPhase, patchTemporalSession, setTemporalSession,
     temporalPrefill, clearTemporalPrefill,
+    temporalAutoStart, clearTemporalAutoStart,
+    temporalHistory, temporalHistoryView,
+    archiveTemporal, openTemporalHistoryView, closeTemporalHistoryView,
   } = useNebulaStore();
 
   const [profile, setProfile] = useState({ name: '', currentSituation: '', goal: '', biggestFear: '', keyDecision: '' });
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [mode, setMode] = useState('api'); // 'api' | 'demo'
+  const [mode, setMode] = useState('demo'); // 'api' | 'demo'（默认 demo，使用频率更高）
   const [modelProvider, setModelProviderLocal] = useState(() => getTemporalProvider());
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [credsTick, setCredsTick] = useState(0); // 保存后刷新 hasValidKey 缓存判断
   const abortRef = useRef(false);
-  const modeRef = useRef('api');
+  const modeRef = useRef('demo');
+  const startRef = useRef(null); // 用于 autoStart 回调
+  const [tunnelActive, setTunnelActive] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // ===== 场景 Demo 全链路自动衔接 =====
+  // demoChainActive: 当前是否处于「创业者 Demo 自动演示」链路中
+  // forkAutoTrigger: 递增计数器，变化时通知 ForkCompareSection 自动展开+打字+对比
+  const [demoChainActive, setDemoChainActive] = useState(false);
+  const [forkAutoTrigger, setForkAutoTrigger] = useState(0);
+  const contentRef = useRef(null);          // 主体滚动容器（折叠完成后滚动到底）
+  const forkTriggeredRef = useRef(false);   // 防止分叉对比 auto-demo 重复触发
+  const demoTypeAbortRef = useRef(false);   // 中断表单打字机
+
+  // 把主体内容容器滚动到底部
+  const scrollContentToBottom = useCallback((smooth = true) => {
+    const el = contentRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }, []);
 
   // 吸收从决策推演带入的预填 profile（横纵联动）
   // 仅在 idle 状态下吸收一次，吸收后立刻清空 store 的 prefill，避免重复
+  // temporalAutoStart=true 时（场景 Demo）：
+  //   1) 逐字段打字机填入 profile（让观众看清「带入的上下文」）
+  //   2) 打完后自动开始折叠
   const [prefillSource, setPrefillSource] = useState(null);
   useEffect(() => {
     if (temporalOpen && temporalPhase === 'idle' && temporalPrefill) {
-      setProfile({
-        name: temporalPrefill.name || '',
-        currentSituation: temporalPrefill.currentSituation || '',
-        goal: temporalPrefill.goal || '',
-        biggestFear: temporalPrefill.biggestFear || '',
-        keyDecision: temporalPrefill.keyDecision || '',
-      });
-      setPrefillSource(temporalPrefill._source || null);
+      const pf = temporalPrefill;
+      setPrefillSource(pf._source || null);
       clearTemporalPrefill();
+
+      if (temporalAutoStart) {
+        // ===== 场景 Demo 全链路：直接填表 → 自动开始 =====
+        setMode('demo');
+        modeRef.current = 'demo';
+        clearTemporalAutoStart();
+        setDemoChainActive(true);
+        forkTriggeredRef.current = false;
+        demoTypeAbortRef.current = false;
+
+        // 直接填入 profile（不再逐字打字，加快衔接速度）
+        setProfile({
+          name: pf.name || '',
+          currentSituation: pf.currentSituation || '',
+          goal: pf.goal || '',
+          biggestFear: pf.biggestFear || '',
+          keyDecision: pf.keyDecision || '',
+        });
+
+        // 等 React 刷新 state 后自动开始
+        setTimeout(() => {
+          if (!demoTypeAbortRef.current && startRef.current) startRef.current();
+        }, 150);
+      } else {
+        // 非自动衔接：直接填入（原行为）
+        setProfile({
+          name: pf.name || '',
+          currentSituation: pf.currentSituation || '',
+          goal: pf.goal || '',
+          biggestFear: pf.biggestFear || '',
+          keyDecision: pf.keyDecision || '',
+        });
+      }
     }
-  }, [temporalOpen, temporalPhase, temporalPrefill, clearTemporalPrefill]);
+  }, [temporalOpen, temporalPhase, temporalPrefill, clearTemporalPrefill, temporalAutoStart, clearTemporalAutoStart]);
 
   const addLog = useCallback((msg, type = 'info') => {
     setLogs(prev => [...prev, { text: msg, type, time: Date.now() }]);
@@ -103,6 +157,10 @@ export default function TemporalDeliberation() {
     }
     setError(null); setLogs([]); abortRef.current = false;
     setTemporalProvider(modelProvider);
+
+    // 触发时间线隧道动画（V4.7 视觉叙事增强，4 秒）
+    setTunnelActive(true);
+    setTimeout(() => setTunnelActive(false), 4000);
 
     const session = { profile, selves: [], letters: [], crossReviews: [], matrix: null };
     patchTemporalSession(session);
@@ -227,6 +285,24 @@ export default function TemporalDeliberation() {
     }
   }, [profile, modelProvider, addLog, patchTemporalSession, setTemporalPhase]);
 
+  // 同步 startTemporal 到 ref（autoStart 回调用，避免闭包过期）
+  useEffect(() => { startRef.current = startTemporal; }, [startTemporal]);
+
+  // ===== Demo 链路：折叠完成后自动滚动到底 → 触发分叉对比 auto-demo =====
+  useEffect(() => {
+    if (!demoChainActive || temporalPhase !== 'complete' || forkTriggeredRef.current) return;
+    forkTriggeredRef.current = true;
+    const timers = [];
+    // 2s 后滚动到底（让观众读完元洞察 + 信件摘要）
+    timers.push(setTimeout(() => scrollContentToBottom(true), 2000));
+    // 3.5s 再次滚动 + 触发分叉对比自动演示
+    timers.push(setTimeout(() => {
+      scrollContentToBottom(true);
+      setForkAutoTrigger(t => t + 1);
+    }, 3500));
+    return () => timers.forEach(clearTimeout);
+  }, [demoChainActive, temporalPhase, scrollContentToBottom]);
+
   const cancelTemporal = useCallback(() => {
     abortRef.current = true; setTemporalPhase('idle');
     addLog('✕ 已取消', 'warn');
@@ -269,6 +345,15 @@ export default function TemporalDeliberation() {
   const phaseInfo = PHASES[temporalPhase] || PHASES.idle;
   const session = temporalSession;
   const running = ['generating', 'writing', 'reviewing', 'anchoring'].includes(temporalPhase);
+
+  // 历史面板（早返回，独立全屏覆盖）
+  if (showHistory && !temporalHistoryView) {
+    return <TemporalHistory onClose={() => setShowHistory(false)} />;
+  }
+  if (temporalHistoryView) {
+    return <TemporalHistory />;
+  }
+
 
   return (
     <div style={{
@@ -355,6 +440,19 @@ export default function TemporalDeliberation() {
               </span>
             )}
             {running && <button onClick={cancelTemporal} style={btn('#A44')}>✕ 取消</button>}
+            {/* idle 历史入口（始终显示，无记录看空态引导） */}
+            {temporalPhase === 'idle' && (
+              <button onClick={() => setShowHistory(true)} style={btn('#8899cc')}>
+                📁 历史{temporalHistory.length > 0 ? ` (${temporalHistory.length})` : ''}
+              </button>
+            )}
+            {/* complete 存档（归档后跳历史看新存档） */}
+            {temporalPhase === 'complete' && (
+              <button
+                onClick={() => { archiveTemporal(); setShowHistory(true); }}
+                style={btn('#4A8')}
+              >📁 存档</button>
+            )}
             {temporalPhase === 'complete' && <button onClick={handleNew} style={btn('#FFD700')}>🔄 重新折叠</button>}
             {temporalPhase === 'partialComplete' && <button onClick={retryAnchoring} style={btn('#FFD700')}>🔄 重试锚点收束</button>}
             {temporalPhase === 'partialComplete' && <button onClick={handleNew} style={btn('#888')}>🔄 重新折叠</button>}
@@ -363,7 +461,7 @@ export default function TemporalDeliberation() {
         </div>
 
         {/* 主体 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+        <div ref={contentRef} style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
           {temporalPhase === 'idle' && (
             <>
               {prefillSource === 'deliberation' && (
@@ -385,7 +483,7 @@ export default function TemporalDeliberation() {
                   border: '1px solid rgba(72,196,128,0.25)',
                   color: '#8e8', fontSize: '12px', fontFamily: 'system-ui', lineHeight: 1.6,
                 }}>
-                  🎬 <span style={{ fontWeight: 600 }}>演示模式</span> — 使用预置的假数据快速展示时间折叠流程。
+                  🎬 <span style={{ fontWeight: 600 }}>演示模式</span> — 使用预置数据快速展示时间折叠流程。
                   切换到 <span style={{ color: '#acd', cursor: 'pointer', textDecoration: 'underline' }}
                     onClick={() => switchMode('api')}>🌐 API 模式</span> 使用真实大模型。
                 </div>
@@ -401,7 +499,7 @@ export default function TemporalDeliberation() {
             </>
           )}
           {running && <RunningView logs={logs} phase={temporalPhase} session={session} />}
-          {temporalPhase === 'complete' && session && <CompleteView session={session} mode={mode} />}
+          {temporalPhase === 'complete' && session && <CompleteView session={session} mode={mode} autoDemoTrigger={forkAutoTrigger} />}
           {temporalPhase === 'partialComplete' && session && (
             <>
               {error && (
@@ -423,12 +521,13 @@ export default function TemporalDeliberation() {
           )}
         </div>
       </div>
+      {tunnelActive && <TimeTunnel />}
     </div>
   );
 }
 
 // ============== complete 完整结果 ==============
-function CompleteView({ session, mode }) {
+function CompleteView({ session, mode, autoDemoTrigger = 0 }) {
   const { matrix, selves, letters, crossReviews } = session;
   const [selectedAnchor, setSelectedAnchor] = useState(null);
   const traces = useMemo(() => traceAllAnchors(matrix, selves, letters, crossReviews),
@@ -443,7 +542,7 @@ function CompleteView({ session, mode }) {
           border: '1px solid rgba(72,196,128,0.25)',
           color: '#8e8', fontSize: '12px', fontFamily: 'system-ui',
         }}>
-          🎬 <span style={{ fontWeight: 600 }}>演示数据</span> — 本页所有内容均为预置假数据，不代表真实 LLM 分析结果。
+          🎬 <span style={{ fontWeight: 600 }}>演示数据</span> — 本页所有内容均为预置数据，不代表真实 LLM 分析结果。
         </div>
       )}
       {/* 元洞察 */}
@@ -517,23 +616,57 @@ function CompleteView({ session, mode }) {
 
       {/* 分叉对比 */}
       {session.profile && (
-        <ForkCompareSection profile={session.profile} mode={mode} />
+        <ForkCompareSection profile={session.profile} mode={mode} autoDemoTrigger={autoDemoTrigger} />
       )}
     </div>
   );
 }
 
 // ============== 分叉对比区块 ==============
-function ForkCompareSection({ profile, mode }) {
+function ForkCompareSection({ profile, mode, autoDemoTrigger = 0 }) {
   const [expanded, setExpanded] = useState(false);
   const [altInput, setAltInput] = useState('');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
+  const demoAbortedRef = useRef(false);
 
-  const handleCompare = async () => {
-    const alts = altInput.split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
+  const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // 打字机逐字写入 textarea（chunk 式，与决策推演 typeText 一致：350ms 内打完）
+  const typeAltInput = async (fullText, targetMs = 350) => {
+    if (!fullText) return;
+    const TICK = 30;
+    const totalTicks = Math.max(1, Math.ceil(targetMs / TICK));
+    const chunkSize = Math.max(1, Math.ceil(fullText.length / totalTicks));
+    setAltInput('');
+    let pos = 0;
+    while (pos < fullText.length) {
+      if (demoAbortedRef.current) return;
+      pos = Math.min(pos + chunkSize, fullText.length);
+      setAltInput(fullText.slice(0, pos));
+      await _sleep(TICK);
+    }
+  };
+
+  // 从 profile 推导最相关的替代路径（创业者 Demo 场景）
+  const buildDemoAltPaths = useCallback((pf) => {
+    const dec = (pf.keyDecision || '').toLowerCase();
+    // 根据关键决策关键词智能匹配
+    if (dec.includes('辞职') || dec.includes('裸辞') || dec.includes('创业')) {
+      return '继续在大厂上班，业余时间做产品\n辞职但选择传统行业，避开AI赛道\n找技术合伙人一起创业，分摊风险';
+    }
+    if (dec.includes('换') || dec.includes('转行') || dec.includes('方向')) {
+      return '保持现状，在现有领域深耕\n完全转行，从零开始\n业余探索新方向，主业不变';
+    }
+    // 通用 fallback
+    return '维持现状，不做改变\n采取保守方案，降低风险\n激进推进，全力投入';
+  }, []);
+
+  const handleCompare = async (overrideInput) => {
+    const raw = overrideInput != null ? overrideInput : altInput;
+    const alts = raw.split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
     if (alts.length < 1) { setError('请至少输入一条替代路径'); return; }
     // Demo 模式不检查 API Key
     if (mode !== 'demo' && !hasValidKey(getTemporalProvider())) {
@@ -551,12 +684,32 @@ function ForkCompareSection({ profile, mode }) {
         setReport(generateCompareReport(scored));
       }
     } catch (e) {
-      // API 模式下 compareForks 可能抛 LLMUnavailableError，用其真实信息（超时/无应答等）
       const reason = e?.name === 'LLMUnavailableError' ? e.message : (e?.message || '对比失败');
       setError(reason);
     }
     setLoading(false);
   };
+
+  // ===== 场景 Demo 自动演示：展开 → 打字机填替代路径 → 自动对比 =====
+  useEffect(() => {
+    if (autoDemoTrigger <= 0) return;
+    demoAbortedRef.current = false;
+    (async () => {
+      // 1. 展开分叉对比区块
+      setExpanded(true);
+      await _sleep(250);
+      if (demoAbortedRef.current) return;
+      // 2. 打字机填入最相关的替代路径（chunk 式，与决策推演节奏一致）
+      const altPaths = buildDemoAltPaths(profile);
+      await typeAltInput(altPaths, 350);
+      if (demoAbortedRef.current) return;
+      await _sleep(250);
+      // 3. 自动触发对比
+      await handleCompare(altPaths);
+    })();
+    return () => { demoAbortedRef.current = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDemoTrigger]);
 
   const barColor = (score) => score >= 70 ? '#66BB6A' : score >= 45 ? '#FF9800' : '#EF5350';
   const barWidth = (score) => Math.max(4, score) + '%';
