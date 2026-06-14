@@ -1,6 +1,49 @@
 # Changelog · FoldNeb 折叠星云
 
-## V4.1 — Skill 化：用户可编辑的商业分析能力 + Obsidian 本地留痕 (2026-06-14)
+## V4.3 — 档案时间线 + 宽屏适配 + API 统一 (2026-06-14)
+
+情报分析升级为**时间线折叠结构**，档案 Modal 适配宽屏，API 配置统一到决策推演共享的 Provider 机制。
+
+### 核心改动
+
+#### 1. 情报分析时间线化（`gameData.js` 数据结构改造）
+- `recentAnalysis: { 单对象 }` → `analysisHistory: [ 数组 ]`（最新情报置顶）
+- 黄仁勋首批 2 条情报：
+  - **2026-06-14**（新）：Computex 2026 触发，H200-China + NIM Robotics + CUDA 物理世界 OS 叙事
+  - **2026-04-20**（历史）：原版情报保留
+- 支持按日期粒度折叠/展开（`expandedHistory` state 控制每条历史的展开态）
+
+#### 2. 档案 Modal 宽屏优化（`index.css` + `NebulaUI.jsx`）
+- **滚动根因修复**：右栏整体 `position: sticky; top: 0` 导致左右两栏独立滚动 → 改为只 sticky 顶部 `.archive-skill-bar`（工具条钉顶但不钉整栏）
+- **Skill 管理面板展开时动态取消 sticky**：大 textarea 被钉顶工具条遮挡 → 展开时 className 切换取消 sticky
+- **宽屏断点** `@media (min-width: 1280px)`：Modal max-width 撑到 1160px / font-size 收紧到 12px / 两栏比例改 `1.15fr / 0.85fr`
+- **模块 Grid 自适应**：左栏 4 个模块（核心档案/原创语录/核心思想/影响力卫星）包进 `.archive-modules-grid`（`auto-fit minmax(220px, 1fr)`）
+
+#### 3. API 配置统一到决策推演 Provider（`analysisApi.js`）
+- 删除独立配置：`CONFIG_KEY` / `DEFAULT_CONFIG` / `getApiConfig` / `saveApiConfig` / `isApiConfigured`
+- 新增 `getArchiveProvider()` / `setArchiveProvider(pid)`（localStorage key: `foldneb_archive_provider`）
+- `generateBusinessAnalysis` 改用 `getEffectiveConfig(provider)` + `getCorsProxyUrl()` 统一调用链
+- corsproxy.io 时自动加 `X-Requested-Headers` 头
+- `NebulaUI.jsx` API 配置表单替换为 `<ApiSettingsPanel>`（与决策推演同一组件）
+
+### 修改文件清单
+
+| 文件 | 改动 |
+|------|------|
+| `src/data/gameData.js` | `recentAnalysis` → `analysisHistory` 数组 + 新增 2026-06-14 情报 |
+| `src/components/NebulaUI.jsx` | 新增 `expandedHistory`/`archiveProvider` state + 动态 `.archive-skill-bar` + `.archive-modules-grid` + 时间线渲染 + `ApiSettingsPanel` |
+| `src/index.css` | 删除右栏 sticky + 新增 `.archive-skill-bar` + `.archive-modules-grid` + `.analysis-timeline-*` + `@media (min-width: 1280px)` |
+| `src/utils/analysisApi.js` | 删除独立配置 + 新增 `getArchiveProvider`/`setArchiveProvider` + 改用 `getEffectiveConfig`/`getCorsProxyUrl` |
+
+### 关键经验教训
+
+52. **sticky 定位的"整栏钉顶"陷阱**：右栏整体 `position: sticky; top: 0` 会让该栏内容溢出时独立滚动，与左栏不同步。正确做法是只 sticky 顶部工具条（`.archive-skill-bar`），整栏让外层容器统一滚动
+53. **sticky 工具条与展开面板的冲突**：Skill 管理面板展开后大 textarea 高度增加，sticky 工具条会遮挡内容。解决方案是面板展开时动态切换 className 取消 sticky，收起后恢复
+54. **API 配置应该全平台共享而非每模块独立**：档案页和决策推演用同一套 Provider 机制（`getEffectiveConfig`），用户配一次密钥两边可用。避免「每加一个 AI 功能就加一套密钥配置」的重复
+
+---
+
+## V4.2 — Skill 化：用户可编辑的商业分析能力 + Obsidian 本地留痕 (2026-06-14)
 
 把「AI 商业情报分析」从硬编码 prompt 升级为**用户可编辑、可新增、可切换的 Skill 系统**，并实现三渠道本地留痕。
 
@@ -34,7 +77,7 @@
 | Obsidian vault `5_skill库/*.md` | iCloud 同步，Obsidian 可检索 |
 | 运行时「⬇ 导出 md」 | 用户自定义 skill 实时导出（下载文件 + 复制剪贴板） |
 
-### 附：V4.0+ 思想者深度档案（前置工作，commit 3a2f33f）
+### 附：V4.1 思想者深度档案（前置工作，commit 3a2f33f）
 - `gameData.js` 黄仁勋/马斯克新增 6 类深度字段：`bio`(传记多段) / `timeline`(时间轴) / `philosophy`(核心思想) / `quotes`(语录+背景) / `works`(代表作) / `legacy`(影响启示)
 - `NebulaUI.jsx` Modal 全新渲染：6 大版块带视觉分隔（左竖条 + 英文副标题 + 渐变背景）
 - graceful fallback：无深度字段 agent 仍显原 description + dialogue，不破坏

@@ -239,6 +239,15 @@ html, body, #root {
   padding: 32px 40px;
 }
 
+/* 宽屏电脑：撑宽 + 收紧字间距，减少纵向滚动 */
+@media (min-width: 1280px) {
+  .archive-modal-card {
+    max-width: 1160px;
+    padding: 28px 36px;
+    font-size: 12px;
+  }
+}
+
 /* 平板：略收窄 */
 @media (max-width: 900px) {
   .archive-modal-overlay { padding: 16px; }
@@ -265,20 +274,37 @@ html, body, #root {
 /* ===== 两栏布局：左=基础资料 / 右=近期深度分析 ===== */
 .archive-two-col {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 28px;
   align-items: start;
 }
 
-/* 中间分隔线 */
+/* 中间分隔线（右栏不再整体 sticky） */
 .archive-right-col {
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   padding-left: 24px;
-  position: sticky;
-  top: 0;
 }
 
-/* 平板/窄屏：右栏降到下方 */
+/* 右栏顶部工具条 sticky：标题/Skill库/生成按钮始终可见，结果区跟随主流滚动 */
+.archive-skill-bar {
+  position: sticky;
+  top: -8px;
+  z-index: 5;
+  padding: 8px 0 12px;
+  margin: -8px 0 12px;
+  background: linear-gradient(180deg, rgba(15,12,40,0.98) 55%, rgba(15,12,40,0.82) 80%, rgba(15,12,40,0));
+  backdrop-filter: blur(4px);
+}
+
+/* 左栏结构化模块自适应网格：timeline/philosophy/quotes/works 等可左右拼排 */
+.archive-modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* 平板/窄屏：右栏降到下方，工具条不再 sticky */
 @media (max-width: 1200px) {
   .archive-two-col {
     grid-template-columns: 1fr;
@@ -289,7 +315,13 @@ html, body, #root {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     padding-left: 0;
     padding-top: 20px;
+  }
+  .archive-skill-bar {
     position: static;
+    background: none;
+    backdrop-filter: none;
+    padding: 0 0 12px;
+    margin: 0 0 12px;
   }
 }
 
@@ -375,4 +407,88 @@ html, body, #root {
   padding: 5px 8px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   color: #c0ccdc;
+}
+
+/* ===== 历史情报时间线（折叠面板） ===== */
+.analysis-timeline {
+  margin-top: 20px;
+  padding-top: 4px;
+}
+
+.analysis-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.analysis-timeline-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+}
+
+.analysis-timeline-label {
+  font-size: 9px;
+  color: #6677aa;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.analysis-timeline-item {
+  margin-bottom: 4px;
+}
+
+.analysis-timeline-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #99aabb;
+  font-size: 10px;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.analysis-timeline-toggle:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(136,221,170,0.2);
+  color: #bbccee;
+}
+
+.analysis-timeline-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(136,221,170,0.4);
+  border: 1px solid rgba(136,221,170,0.6);
+  flex-shrink: 0;
+}
+
+.analysis-timeline-date {
+  font-weight: 600;
+  color: #88ddaa;
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.analysis-timeline-trigger {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+  font-size: 9.5px;
+}
+
+.analysis-timeline-arrow {
+  flex-shrink: 0;
+  color: #556677;
+  font-size: 11px;
 }

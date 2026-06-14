@@ -8,10 +8,11 @@ import CustomCloneChat from './CustomCloneChat.jsx';
 import {
   generateBusinessAnalysis,
   renderMarkdown,
-  isApiConfigured,
-  getApiConfig,
-  saveApiConfig,
+  getArchiveProvider,
+  setArchiveProvider,
 } from '../utils/analysisApi.js';
+import { hasValidKey, getEffectiveConfig, MODEL_PROVIDERS, DEFAULT_PROVIDER_ID } from '../utils/modelConfig.js';
+import ApiSettingsPanel from './ApiSettingsPanel.jsx';
 import {
   getSkills,
   getActiveSkill,
@@ -51,7 +52,9 @@ export default function NebulaUI() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const [showApiConfig, setShowApiConfig] = useState(false);
-  const [apiConfigForm, setApiConfigForm] = useState(getApiConfig());
+  const [archiveProvider, setArchiveProviderState] = useState(getArchiveProvider());
+  // 历史情报折叠面板：{ [agentId]: Set<date> } 展开的日期集合
+  const [expandedHistory, setExpandedHistory] = useState({});
 
   // ===== Skill 管理状态 =====
   const [activeSkill, setActiveSkillState] = useState(getActiveSkill());
@@ -141,7 +144,7 @@ export default function NebulaUI() {
    */
   const handleGenerateAnalysis = async () => {
     if (!agent || analysisLoading) return;
-    if (!isApiConfigured()) {
+    if (!hasValidKey(archiveProvider)) {
       setAnalysisError('请先配置 API Key（点击右上方 ⚙️）');
       setShowApiConfig(true);
       return;
@@ -171,11 +174,14 @@ export default function NebulaUI() {
     }
   };
 
-  /** 保存 API 配置 */
-  const handleSaveApiConfig = () => {
-    saveApiConfig(apiConfigForm);
-    setShowApiConfig(false);
-    setAnalysisError('');
+  /** 分享 Provider 配置的保存回调 */
+  const handleCredsSaved = (pid) => {
+    setArchiveProviderState(pid);
+    setArchiveProvider(pid);
+    if (hasValidKey(pid)) {
+      setShowApiConfig(false);
+      setAnalysisError('');
+    }
   };
 
   // ===== Skill 管理操作 =====
@@ -693,6 +699,7 @@ export default function NebulaUI() {
               </div>
             )}
 
+            <div className="archive-modules-grid">
             {/* ===== 人生时间轴（深度档案：timeline） ===== */}
             {agent.timeline && agent.timeline.length > 0 && (
               <div style={{ marginBottom: 18 }}>
@@ -828,6 +835,7 @@ export default function NebulaUI() {
                 ))}
               </div>
             )}
+            </div>{/* /modules-grid: quotes + works */}
 
             {/* ===== 影响与启示（深度档案：legacy） ===== */}
             {agent.legacy && (
@@ -944,6 +952,8 @@ export default function NebulaUI() {
 
             {/* ===== 右栏：近期深度分析 ===== */}
             <aside className="archive-right-col">
+              {/* 顶部工具条 sticky：标题/生成/配置始终可见；Skill 管理面板展开时取消 sticky */}
+              <div className={skillManagerOpen ? '' : 'archive-skill-bar'}>
               <div style={{
                 fontSize: 11, color: '#88ddaa', marginBottom: 10,
                 letterSpacing: '0.15em', fontWeight: 600,
@@ -1109,64 +1119,25 @@ export default function NebulaUI() {
                 style={{
                   width: '100%', padding: '5px', marginBottom: 10,
                   background: 'transparent', border: 'none',
-                  color: isApiConfigured() ? '#88ddaa' : '#ffaa66',
+                  color: hasValidKey(archiveProvider) ? '#88ddaa' : '#ffaa66',
                   fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
                   opacity: 0.7,
                 }}
               >
-                {isApiConfigured() ? `⚙️ ${getApiConfig().model}` : '⚙️ 配置大模型 API（未配置）'}
+                {(() => {
+                  if (hasValidKey(archiveProvider)) {
+                    const p = MODEL_PROVIDERS.find(x => x.id === archiveProvider);
+                    const cfg = getEffectiveConfig(archiveProvider);
+                    return `⚙️ ${p?.name || archiveProvider} · ${cfg.model}`;
+                  }
+                  return '⚙️ 配置大模型 API（与决策推演共享密钥）';
+                })()}
               </button>
+              </div>{/* /archive-skill-bar */}
 
-              {/* API 配置表单 */}
+              {/* API 配置面板（与决策推演共用 ApiSettingsPanel） */}
               {showApiConfig && (
-                <div style={{
-                  padding: 12, marginBottom: 12,
-                  background: 'rgba(255,255,255,0.03)', borderRadius: 10,
-                  border: '1px solid rgba(136,221,170,0.15)',
-                  fontSize: 11,
-                }}>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ display: 'block', color: '#8899bb', marginBottom: 3 }}>API Base URL</label>
-                    <input
-                      type="text" value={apiConfigForm.baseURL}
-                      onChange={(e) => setApiConfigForm({ ...apiConfigForm, baseURL: e.target.value })}
-                      placeholder="https://api.openai.com/v1"
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6,
-                        background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
-                        color: '#e8f0ff', fontSize: 11, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ display: 'block', color: '#8899bb', marginBottom: 3 }}>API Key</label>
-                    <input
-                      type="password" value={apiConfigForm.apiKey}
-                      onChange={(e) => setApiConfigForm({ ...apiConfigForm, apiKey: e.target.value })}
-                      placeholder="sk-..."
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6,
-                        background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
-                        color: '#e8f0ff', fontSize: 11, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={{ display: 'block', color: '#8899bb', marginBottom: 3 }}>Model</label>
-                    <input
-                      type="text" value={apiConfigForm.model}
-                      onChange={(e) => setApiConfigForm({ ...apiConfigForm, model: e.target.value })}
-                      placeholder="gpt-4o / glm-4 / deepseek-chat ..."
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6,
-                        background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(136,153,204,0.3)',
-                        color: '#e8f0ff', fontSize: 11, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <button onClick={handleSaveApiConfig} style={{
-                    width: '100%', padding: '7px', borderRadius: 6,
-                    background: 'rgba(136,221,170,0.15)', border: '1px solid rgba(136,221,170,0.35)',
-                    color: '#88ddaa', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
-                  }}>✓ 保存配置</button>
-                  <div style={{ fontSize: 9.5, color: '#7788aa', marginTop: 6, lineHeight: 1.5 }}>
-                    支持 OpenAI 兼容接口（GLM / DeepSeek / Kimi / 通义等）。Key 仅存于本地浏览器。
-                  </div>
-                </div>
+                <ApiSettingsPanel provider={archiveProvider} onSaved={handleCredsSaved} />
               )}
 
               {/* 错误提示 */}
@@ -1181,13 +1152,29 @@ export default function NebulaUI() {
               {/* 分析内容渲染 */}
               {(() => {
                 const cached = analysisByAgent[agent.id];
-                const preset = agent.recentAnalysis;
-                const data = cached || (preset ? {
-                  markdown: preset.markdown,
-                  date: preset.date,
-                  trigger: preset.trigger,
+                // 兼容：优先用 analysisHistory 数组，回退到旧 recentAnalysis
+                const history = agent.analysisHistory || (agent.recentAnalysis ? [agent.recentAnalysis] : []);
+                // 最新一期预置情报
+                const latestPreset = history[0] || null;
+                // 历史记录（除最新一期）
+                const pastAnalyses = history.slice(1);
+                // 当前展示的数据：AI生成的 > 最新预置
+                const data = cached || (latestPreset ? {
+                  markdown: latestPreset.markdown,
+                  date: latestPreset.date,
+                  trigger: latestPreset.trigger,
                   source: 'preset',
                 } : null);
+
+                // 历史展开切换
+                const toggleHistory = (date) => {
+                  setExpandedHistory((prev) => {
+                    const cur = new Set(prev[agent.id] || []);
+                    if (cur.has(date)) cur.delete(date);
+                    else cur.add(date);
+                    return { ...prev, [agent.id]: cur };
+                  });
+                };
 
                 if (analysisLoading && !cached) {
                   return (
@@ -1233,6 +1220,50 @@ export default function NebulaUI() {
                       className="analysis-md-body"
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(data.markdown) }}
                     />
+
+                    {/* ===== 历史情报时间线（折叠） ===== */}
+                    {pastAnalyses.length > 0 && (
+                      <div className="analysis-timeline">
+                        <div className="analysis-timeline-header">
+                          <span className="analysis-timeline-line" />
+                          <span className="analysis-timeline-label">📜 历史情报 · {pastAnalyses.length} 期</span>
+                          <span className="analysis-timeline-line" />
+                        </div>
+                        {pastAnalyses.map((item) => {
+                          const open = (expandedHistory[agent.id] || new Set()).has(item.date);
+                          return (
+                            <div key={item.date} className="analysis-timeline-item">
+                              <button
+                                className="analysis-timeline-toggle"
+                                onClick={() => toggleHistory(item.date)}
+                              >
+                                <span className="analysis-timeline-dot" />
+                                <span className="analysis-timeline-date">{item.date}</span>
+                                <span className="analysis-timeline-trigger">{item.trigger}</span>
+                                <span className="analysis-timeline-arrow">{open ? '▾' : '▸'}</span>
+                              </button>
+                              {open && (
+                                <div style={{ marginTop: 8, animation: 'fadeInUp 0.3s ease-out' }}>
+                                  <div style={{
+                                    fontSize: 9.5, color: '#7788aa', marginBottom: 8, lineHeight: 1.6,
+                                    padding: '6px 8px', background: 'rgba(136,221,170,0.03)', borderRadius: 6,
+                                    borderLeft: '2px solid rgba(136,221,170,0.2)',
+                                  }}>
+                                    <div>📅 {item.date}</div>
+                                    <div style={{ marginTop: 2 }}>🎯 {item.trigger}</div>
+                                    <div style={{ marginTop: 2, opacity: 0.6 }}>📋 历史预置分析</div>
+                                  </div>
+                                  <div
+                                    className="analysis-md-body"
+                                    dangerouslySetInnerHTML={{ __html: renderMarkdown(item.markdown) }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </>
                 );
               })()}

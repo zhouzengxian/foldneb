@@ -1,43 +1,25 @@
 // ============================================================
-// 商业动态逻辑深度分析 · 大模型调用 + 配置存取 + Markdown 渲染
+// 商业动态逻辑深度分析 · 大模型调用 + Markdown 渲染
 // ============================================================
-// 支持 OpenAI 兼容接口（OpenAI / GLM / DeepSeek / Kimi / 通义等均兼容）
-// API Key 存于 localStorage（本地演示用途，注意前端暴露风险）
+// API 配置复用 modelConfig.js 的 Provider 机制（与决策推演共享）
 // ============================================================
 
-const CONFIG_KEY = 'foldneb_api_config';
+import { getEffectiveConfig, getCorsProxyUrl, DEFAULT_PROVIDER_ID } from './modelConfig.js';
 
-/**
- * 默认配置（OpenAI 兼容）
- * 用户可在 Modal 的 ⚙️ 配置入口里覆盖 baseURL / apiKey / model
- */
-const DEFAULT_CONFIG = {
-  baseURL: 'https://api.openai.com/v1',
-  apiKey: '',
-  model: 'gpt-4o',
-};
+const ARCHIVE_PROVIDER_KEY = 'foldneb_archive_provider';
 
-/** 读取 API 配置（合并默认值） */
-export function getApiConfig() {
+/** 档案使用的 provider（默认智谱，与决策推演共享密钥） */
+export function getArchiveProvider() {
   try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return { ...DEFAULT_CONFIG };
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    return localStorage.getItem(ARCHIVE_PROVIDER_KEY) || DEFAULT_PROVIDER_ID;
   } catch {
-    return { ...DEFAULT_CONFIG };
+    return DEFAULT_PROVIDER_ID;
   }
 }
 
-/** 保存 API 配置 */
-export function saveApiConfig(cfg) {
-  const merged = { ...getApiConfig(), ...cfg };
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(merged));
-  return merged;
-}
-
-/** 是否已配置可用（apiKey 非空） */
-export function isApiConfigured() {
-  return !!getApiConfig().apiKey?.trim();
+/** 设置档案使用的 provider */
+export function setArchiveProvider(providerId) {
+  try { localStorage.setItem(ARCHIVE_PROVIDER_KEY, providerId); } catch {}
 }
 
 /**
@@ -48,14 +30,19 @@ export function isApiConfigured() {
  */
 export async function generateBusinessAnalysis(agent, onChunk) {
   const { buildAnalysisPrompt } = await import('./analysisPrompt.js');
-  const cfg = getApiConfig();
+  const provider = getArchiveProvider();
+  const cfg = getEffectiveConfig(provider);
 
   if (!cfg.apiKey?.trim()) {
     throw new Error('NO_API_KEY');
   }
 
   const systemPrompt = buildAnalysisPrompt(agent);
-  const url = `${cfg.baseURL.replace(/\/+$/, '')}/chat/completions`;
+
+  // CORS 代理（与决策推演共用同一逻辑）
+  const proxy = getCorsProxyUrl();
+  const originUrl = `${cfg.url.replace(/\/+$/, '')}/chat/completions`;
+  const requestUrl = proxy ? `${proxy}${encodeURIComponent(originUrl)}` : originUrl;
 
   const body = {
     model: cfg.model,
@@ -67,12 +54,18 @@ export async function generateBusinessAnalysis(agent, onChunk) {
     stream: !!onChunk,
   };
 
-  const resp = await fetch(url, {
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${cfg.apiKey}`,
+  };
+  // corsproxy.io 需要把 Authorization token 放进 X-Requested-Headers 避免被代理丢弃
+  if (proxy && proxy.includes('corsproxy.io')) {
+    headers['X-Requested-Headers'] = JSON.stringify({ Authorization: `Bearer ${cfg.apiKey}` });
+  }
+
+  const resp = await fetch(requestUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${cfg.apiKey}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
