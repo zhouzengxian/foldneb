@@ -83,6 +83,7 @@ const useNebulaStore = create((set, get) => ({
   // ========================================
   selectedAgent: null,
   focusAgentId: null,
+  focusPlanetId: null, // V4.5：定位知识星球月球
   hoveredAgentId: null,
   cameraTarget: [0, 0, 0],
   autoRotate: true,
@@ -115,6 +116,17 @@ const useNebulaStore = create((set, get) => ({
   userReactions: loadFromStorage('userReactions', {}),
   // 朋友圈当前查看的对象：null（主页）| { kind:'agent', id } | { kind:'me' }
   momentsViewer: null,
+
+  // ========================================
+  // 知识星球系统（V4.5）
+  // ========================================
+  // 用户创建的星球（灰白月球天体，环绕 user 节点）
+  // [{ id, name, description, emoji, color, createdAt, orbitAngle }]
+  userPlanets: loadFromStorage('userPlanets', []),
+  // 星球内容流：{ [planetId]: [{ id, text, source:'manual'|'agent', authorName, authorAvatar, time, createdAt }] }
+  planetPosts: loadFromStorage('planetPosts', {}),
+  // 当前正在查看的星球 ID（null = 列表页）
+  currentPlanetId: null,
 
   // ========================================
   // 决策推演系统
@@ -184,6 +196,9 @@ const useNebulaStore = create((set, get) => ({
     }
   },
   clearFocus: () => set({ focusAgentId: null, autoRotate: true }),
+  // V4.5：定位/聚焦某颗知识星球月球，让相机飞过去
+  focusPlanet: (planetId) => set({ focusPlanetId: planetId, autoRotate: false }),
+  clearFocusPlanet: () => set({ focusPlanetId: null, autoRotate: true }),
   setHoveredAgent: (id) => set({ hoveredAgentId: id }),
   setCameraTarget: (pos) => set({ cameraTarget: pos }),
   setDialogueVisible: (v) => set({ dialogueVisible: v }),
@@ -425,6 +440,74 @@ const useNebulaStore = create((set, get) => ({
 
   // 切换朋友圈查看对象
   setMomentsViewer: (viewer) => set({ momentsViewer: viewer }),
+
+  // ========================================
+  // 知识星球系统 Actions（V4.5）
+  // ========================================
+  createPlanet: ({ name, description = '', emoji = '🌑', color = '#b8b8c0' }) => {
+    const id = 'planet_' + Date.now();
+    const now = new Date();
+    const planet = {
+      id,
+      name: name.trim(),
+      description: description.trim(),
+      emoji,
+      color,
+      createdAt: now.toISOString(),
+      // 轨道角度：基于已有星球数量均匀分布
+      orbitAngle: get().userPlanets.length * (Math.PI * 2 / 6),
+    };
+    const userPlanets = [...get().userPlanets, planet];
+    set({ userPlanets });
+    saveToStorage('userPlanets', userPlanets);
+    return planet;
+  },
+
+  deletePlanet: (planetId) => {
+    const userPlanets = get().userPlanets.filter(p => p.id !== planetId);
+    set({ userPlanets });
+    saveToStorage('userPlanets', userPlanets);
+    // 级联清理内容
+    const planetPosts = { ...get().planetPosts };
+    delete planetPosts[planetId];
+    set({ planetPosts });
+    saveToStorage('planetPosts', planetPosts);
+    if (get().currentPlanetId === planetId) set({ currentPlanetId: null });
+  },
+
+  setCurrentPlanet: (planetId) => set({ currentPlanetId: planetId }),
+
+  addPlanetPost: (planetId, text, source = 'manual', authorName = null, authorAvatar = null) => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const userProfile = get().userProfile;
+    const post = {
+      id: 'pp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      text: text.trim(),
+      source, // 'manual' | 'agent'
+      authorName: authorName || userProfile?.name || '星主',
+      authorAvatar: authorAvatar || userProfile?.avatar || '🌟',
+      time: `${hh}:${mm}`,
+      createdAt: now.toISOString(),
+    };
+    const planetPosts = { ...get().planetPosts };
+    const list = planetPosts[planetId] ? [post, ...planetPosts[planetId]] : [post];
+    planetPosts[planetId] = list;
+    set({ planetPosts });
+    saveToStorage('planetPosts', planetPosts);
+    return post;
+  },
+
+  deletePlanetPost: (planetId, postId) => {
+    const planetPosts = { ...get().planetPosts };
+    if (!planetPosts[planetId]) return;
+    planetPosts[planetId] = planetPosts[planetId].filter(p => p.id !== postId);
+    if (planetPosts[planetId].length === 0) delete planetPosts[planetId];
+    set({ planetPosts });
+    saveToStorage('planetPosts', planetPosts);
+  },
+
 
 
   // ========================================

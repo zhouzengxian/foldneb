@@ -1,7 +1,7 @@
 {
   "name": "foldneb",
   "private": true,
-  "version": "4.4.0",
+  "version": "4.7.0",
   "type": "module",
   "description": "FoldNeb 折叠星云 — 为思考者建造会生长的思想星河",
   "homepage": "https://zhouzengxian.github.io/foldneb",

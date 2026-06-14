@@ -25,6 +25,7 @@ import SparkleField from './SparkleField.jsx';
 import DistrictGround from './DistrictGround.jsx';
 import DemoEffects from './DemoController.jsx';
 import CustomCloneNode from './CustomCloneNode.jsx';
+import UserPlanets, { calcMoonWorldPos } from './UserPlanets.jsx';
 
 // ============ 用户分身节点 — 发光球形星体 ============
 function UserNode({ getPhysPos }) {
@@ -309,14 +310,18 @@ function CameraController({ getPos }) {
   const autoRotate = useNebulaStore((s) => s.autoRotate);
   const cameraTarget = useNebulaStore((s) => s.cameraTarget);
   const focusAgentId = useNebulaStore((s) => s.focusAgentId);
+  const focusPlanetId = useNebulaStore((s) => s.focusPlanetId);
+  const userPlanets = useNebulaStore((s) => s.userPlanets);
   const draggingNode = useNebulaStore((s) => s.draggingNode);
   const prevFocusRef = useRef(null);
+  const prevPlanetFocusRef = useRef(null);
 
   // focusAgentId 变化时，gsap 推近镜头
   useEffect(() => {
     if (!focusAgentId || !getPos) return;
     if (prevFocusRef.current === focusAgentId) return;
     prevFocusRef.current = focusAgentId;
+    prevPlanetFocusRef.current = null; // 切换焦点时清除月球焦点标记
 
     const [tx, ty, tz] = getPos(focusAgentId);
     if (isNaN(tx)) return;
@@ -335,7 +340,32 @@ function CameraController({ getPos }) {
     });
   }, [focusAgentId, getPos, camera]);
 
-  useFrame(() => {
+  // focusPlanetId 变化时，gsap 推近镜头到月球位置
+  useEffect(() => {
+    if (!focusPlanetId || !getPos || !userPlanets) return;
+    if (prevPlanetFocusRef.current === focusPlanetId) return;
+    prevPlanetFocusRef.current = focusPlanetId;
+    prevFocusRef.current = null;
+
+    const moonPos = calcMoonWorldPos(getPos, userPlanets, focusPlanetId);
+    if (!moonPos) return;
+    const [tx, ty, tz] = moonPos;
+
+    // 推近到月球附近，留出观看距离
+    const dir = new THREE.Vector3(tx, ty, tz).sub(camera.position).normalize();
+    const targetPos = new THREE.Vector3(tx, ty, tz).sub(dir.multiplyScalar(5));
+
+    gsap.to(camera.position, {
+      x: targetPos.x,
+      y: targetPos.y + 1.5,
+      z: targetPos.z,
+      duration: 1.4,
+      ease: 'power2.inOut',
+      onUpdate: () => controlsRef.current?.update(),
+    });
+  }, [focusPlanetId, getPos, userPlanets, camera]);
+
+  useFrame((state) => {
     if (controlsRef.current) {
       // 拖拽 agent 时禁用相机控制（Obsidian 图谱式交互）
       controlsRef.current.enabled = !draggingNode;
@@ -347,6 +377,15 @@ function CameraController({ getPos }) {
           controlsRef.current.target.lerp(
             new THREE.Vector3(tx, ty, tz),
             0.05
+          );
+        }
+      } else if (focusPlanetId && getPos && userPlanets) {
+        // 跟随动态公转的月球，每帧用当前时间重算位置
+        const moonPos = calcMoonWorldPos(getPos, userPlanets, focusPlanetId, state.clock.elapsedTime);
+        if (moonPos) {
+          controlsRef.current.target.lerp(
+            new THREE.Vector3(...moonPos),
+            0.08
           );
         }
       } else {
@@ -674,6 +713,9 @@ function NebulaContent() {
 
       {/* ==== 自定义分身 Agent（custom_clone，锚定在 user 旁） ==== */}
       <CustomCloneNode getPhysPos={getPos} forceGraph={forceGraph} />
+
+      {/* ==== 用户知识星球（环绕 user 的月球天体，V4.5） ==== */}
+      <UserPlanets getPhysPos={getPos} />
 
       {/* ==== 连线层 ==== */}
       <ConnectionLines

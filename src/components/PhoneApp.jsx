@@ -10,6 +10,7 @@ import {
 import { MODEL_PROVIDERS, hasValidKey, DEFAULT_PROVIDER_ID } from '../utils/modelConfig';
 import ApiSettingsPanel from './ApiSettingsPanel';
 import { UserPostCard, AgentDetailScreen, UserMomentsScreen, ComposePost } from './MomentsExtras';
+import { PlanetListScreen, PlanetDetailScreen } from './PlanetExtras';
 
 // ====== iPhone 17 外观常量 ======
 const PHONE = {
@@ -27,6 +28,7 @@ export default function PhoneApp() {
   const togglePhone = useNebulaStore((s) => s.togglePhone);
   const closePhone = useNebulaStore((s) => s.closePhone);
   const setPhoneScreen = useNebulaStore((s) => s.setPhoneScreen);
+  const currentPlanetId = useNebulaStore((s) => s.currentPlanetId);
 
   // 竖排收缩按钮
   if (!phoneOpen) {
@@ -117,6 +119,7 @@ export default function PhoneApp() {
               }}>
                 {phoneScreen === 'moments' && '朋友圈'}
                 {phoneScreen === 'contacts' && '通讯录'}
+                {phoneScreen === 'planet' && '知识星球'}
                 {phoneScreen === 'profile' && '我'}
               </span>
             </div>
@@ -125,6 +128,7 @@ export default function PhoneApp() {
             <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
               {phoneScreen === 'moments' && <MomentsScreen />}
               {phoneScreen === 'contacts' && <ContactsScreen />}
+              {phoneScreen === 'planet' && (currentPlanetId ? <PlanetDetailScreen planetId={currentPlanetId} /> : <PlanetListScreen />)}
               {phoneScreen === 'profile' && <ProfileScreen />}
             </div>
           </div>
@@ -140,6 +144,7 @@ export default function PhoneApp() {
           }}>
             <TabItem label="朋友圈" active={phoneScreen === 'moments'} onClick={() => setPhoneScreen('moments')} />
             <TabItem label="通讯录" active={phoneScreen === 'contacts'} onClick={() => setPhoneScreen('contacts')} />
+            <TabItem label="星球" active={phoneScreen === 'planet'} onClick={() => setPhoneScreen('planet')} />
             <TabItem label="我" active={phoneScreen === 'profile'} onClick={() => setPhoneScreen('profile')} />
           </div>
         </div>

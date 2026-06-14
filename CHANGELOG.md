@@ -1,5 +1,125 @@
 # Changelog · FoldNeb 折叠星云
 
+## V4.7 — 知识资产价值面板 + 商业叙事立柱 (2026-06-14)
+
+本版本是**黑客松收尾档**：把「知识星图市场 — AI 时代知识交易平台雏形」这个叙事彻底立住。底层基础设施（分身/星球/推演/朋友圈/Obsidian）已全部就位，本版本只做**叙事点破 + 价值可视化**，不再加新大功能（守住「尖锐卖点 × 极致完成度」原则）。
+
+### 核心改动
+
+#### 1. 星球价值面板（`PlanetExtras.jsx` · `PlanetValuePanel`）
+每颗知识星球详情页顶部新增**知识资产价值可视化**模块，基于 posts 真实数据实时计算，无后端依赖：
+- **4 个核心指标**：知识卡片数 / AI 衍生次数 / 平均深度（字数）/ 活跃指数（综合分）
+- **5 维 SVG 雷达图**：产出 / AI 协作 / 深度 / 频率 / 广度（含网格、轴线、数据多边形、顶点标签）
+- **智能判语**：🔥 高价值（≥70）/ ✨ 成长中（≥35）/ 🌱 新生（<35）
+- **价值公式注脚**：知识价值 = 产出 × AI 衍生 × 连接 × 时间复利
+
+这是《知识星球商业化战略分析-V4.5》报告判定的**唯一 Tier-1 功能级强加分项**，把「知识资产化」从叙事变成可演示的功能。
+
+#### 2. README 商业叙事三段升级（`README.md`）
+- **顶部「这是什么 — 你的 3D 思考舱」三场景卡片**：做决策时 / 迷茫时 / 学习时，评委第一眼就能理解项目用途
+- **亮点第 12 条「知识星图市场 — AI 时代知识交易平台雏形」**：三层跃迁表（知识形态 / 价值放大 / 消费方式 / 资产形态），传统知识星球 vs FoldNeb
+- **压轴「🚀 商业化愿景与路线图」**：已有能力在平台叙事中的角色表 + 协同地图 ASCII + 三阶段路线图 + 金句收尾
+
+#### 3. 星球板块文案呼应叙事（`PlanetExtras.jsx` · 5 处）
+- 发表 → **铸造**（按钮）
+- 创建 → **开垦**（按钮 + Modal 标题「开垦知识星域」）
+- 发表到「星球」→ **铸造知识卡片到「星球」**（ComposePost 标题）
+- 知识星球 → **知识星图市场**（列表页 Banner 标题）
+- 副文案升级为「每颗星球都是可视化生长的知识资产」
+
+### 取舍决策
+| ✅ 做 | ❌ 不做 |
+|-------|---------|
+| 价值面板（Tier-1 强加分） | 流式响应改造（大工程，收尾翻车风险） |
+| README 商业叙事三段 | Agent 辩论引擎（稀释主线） |
+| 文案呼应叙事 | 概率化未来矩阵（同上） |
+| 错误提示体面化（验证 V3.0+ 已全面实现） | 真支付/账户系统（静态托管做不了，mock 当场穿帮） |
+| | HUD 定位浮层（README 已覆盖，违背极致完成度） |
+
+### 经验教训
+- **63**. 黑客松收尾阶段 = 尖锐卖点 × 极致完成度，绝不再加新大功能，只拉满叙事和完成度
+
+---
+
+## V4.6 — 月球公转轨道 + 星空定位 (2026-06-14)
+
+V4.5 的知识星球月球是静态环绕，本版本让月球**动态公转**并支持从手机端**一键定位到星空中的月球**。
+
+### 核心改动
+
+#### 1. 月球公转轨道系统（`UserPlanets.jsx`）
+- 抽取共享公式 `moonOrbitSpeed(index)` / `moonOrbitRadius(index)`（内圈快外圈慢，开普勒感）
+- MoonNode 改为动态公转：`angle = baseAngle + elapsedTime * orbitSpeed`，统一轨道平面 `y = py + 1.2`
+- 新增 `OrbitRings` 组件：跟随分身位置画半透明轨道环（按 radius 去重避免重叠）
+- 导出 `calcMoonWorldPos()` 供 CameraController 每帧重算月球世界坐标，保证公转与相机聚焦同步
+
+#### 2. 星空定位月球（跨手机端 ↔ 3D 联动）
+- `useNebulaStore.js`：新增 `focusPlanetId` state + `focusPlanet` / `clearFocusPlanet` action（设置时关闭自动旋转）
+- `NebulaScene.jsx::CameraController`：focusPlanetId 变化时 gsap 推近镜头到月球位置，useFrame 中 `target.lerp` 跟随公转中的月球
+- `UserPlanets.jsx::MoonNode`：聚焦时 emissive 冷月光蓝白发光（`#b8d4ff`）+ 脉动光环，确保用户在星空中一眼锁定
+- `PlanetExtras.jsx::PlanetDetailScreen`：封面区新增「🛰️ 在星空中定位这颗月球」按钮，点击 `focusPlanet + closePhone`
+
+#### 3. 月球配色统一冷月光色
+- 聚焦发光、脉动光环、轨道环从紫色统一为冷月光蓝白，更贴近真实月球质感
+
+### 修改文件清单
+
+- `src/components/UserPlanets.jsx`：公转公式 + MoonNode 动态公转 + OrbitRings + calcMoonWorldPos 导出 + 冷月光配色
+- `src/components/NebulaScene.jsx`：import calcMoonWorldPos + CameraController 聚焦动画 + useFrame 跟踪
+- `src/components/PlanetExtras.jsx`：PlanetDetailScreen 定位按钮
+- `src/store/useNebulaStore.js`：focusPlanetId state + focusPlanet/clearFocusPlanet action
+
+---
+
+## V4.5 — 知识星球·仿知识星球沉淀个人知识 (2026-06-14)
+
+新增「知识星球」板块：用户可注册自己的星球（在 3D 星空中化作环绕分身的灰白月球天体），发布文字内容，星主既可手动发表，也可让 AI 自动生成。
+
+### 核心改动
+
+#### 1. 知识星球 3D 月球天体（`UserPlanets.jsx` 新增）
+- 用户创建的每颗星球在 3D 星空中以**不发光的灰白月球**形态渲染，环绕用户分身节点轨道分布
+- **程序化月球纹理**（`createMoonTexture`）：512×512 Canvas 绘制灰白渐变底色 + 6 块月海暗斑 + 24 个带高光边的中型陨石坑 + 60 个小陨石坑点缀
+- 材质：`meshStandardMaterial` color #dcdce2，roughness 0.95，metalness 0，**emissive 黑色零自发光**，完全依靠场景自然光照
+- 缓慢自转 + 按 `orbitAngle` 均匀分布在半径 3.5~4.7 的环带上
+- 点击月球直接打开手机端对应星球详情页
+
+#### 2. 手机端「知识星球」Tab（`PhoneApp.jsx`）
+- 底部 TabBar 新增第 4 个 Tab「星球」（朋友圈 / 通讯录 / **星球** / 我）
+- 顶部标题栏同步增加「知识星球」标题
+- 内容区根据 `currentPlanetId` 切换：null 显示星球列表，有值显示对应星球详情页
+
+#### 3. 星球列表页（`PlanetExtras.jsx::PlanetListScreen`）
+- 顶部深色 Banner：标题「🪐 知识星球」+ 创建按钮
+- 星球卡片：左侧灰白月球质感圆形头像（`radial-gradient` 模拟立体球面 + inset shadow）+ 右侧名称/简介/篇数 + 删除入口
+- 空态提示：「还没有自己的星球」
+
+#### 4. 星球详情页（`PlanetExtras.jsx::PlanetDetailScreen`）仿知识星球
+- 深色渐变封面（星球 emoji + 名称 + 简介 + 创建日期 + 篇数）
+- 右上角「✎ 发表」绿色按钮
+- 内容流：左头像 + 作者名/时间 + 正文，AI 生成的内容带「AI 生成」橙色标签
+- 挂载时自动复位滚动位置
+
+#### 5. 创建星球浮层（`PlanetExtras.jsx::CreatePlanetModal`）
+- 12 个星球 emoji 候选（🌑🌒🌓🌔🌕🌖🌗🌘🌙🪐☄️🌍）单选
+- 名称输入（≤20 字）+ 一句话简介（≤80 字，选填）
+- 底部上滑浮层 + 「完成」按钮创建后直接进入新星球详情页
+
+#### 6. 发布内容（`PlanetExtras.jsx::ComposePlanetPost`）双形式
+- **手动发表**：textarea 输入（≤500 字），「发表」按钮
+- **AI 生成**：「✨ 让 AI 替我生成一篇」按钮，调用本地 6 条主题模板（基于星球名生成思考笔记），800ms 模拟生成延迟后自动发布，标记 `source:'agent'` + 作者「AI 星主助理」
+
+### 修改文件清单
+
+- `src/components/UserPlanets.jsx`（新增）：MoonNode + createMoonTexture + UserPlanets 主组件
+- `src/components/PlanetExtras.jsx`（新增）：PlanetListScreen / PlanetDetailScreen / CreatePlanetModal / ComposePlanetPost / PlanetPostCard / SubNavBar
+- `src/components/NebulaScene.jsx`：import UserPlanets + 在 CustomCloneNode 后渲染 `<UserPlanets>`
+- `src/components/PhoneApp.jsx`：import Planet 组件 + 拉 currentPlanetId + 顶部标题/内容区/TabBar 三处接入「星球」
+- `src/store/useNebulaStore.js`：新增 `userPlanets` / `planetPosts` / `currentPlanetId` state + `createPlanet` / `deletePlanet` / `setCurrentPlanet` / `addPlanetPost` / `deletePlanetPost` 5 个 action（均持久化到 localStorage）
+- `src/index.css`：新增 `@keyframes fnSheetUp` 底部弹层上滑动画
+
+---
+
 ## V4.4 — 朋友圈大版本·仿微信完整社交闭环 (2026-06-14)
 
 朋友圈从「只读 Agent 动态」升级为**用户也能参与**的完整社交闭环：搜索 Agent、点开头像看主页、发布朋友圈并收获 agent 自动回复。

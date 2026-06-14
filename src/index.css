@@ -165,6 +165,12 @@ html, body, #root {
   50% { opacity: 0.55; filter: drop-shadow(0 0 5px rgba(255,200,0,0.9)); transform: scale(1.12); }
 }
 
+/* 知识星球底部弹层上滑（V4.5） */
+@keyframes fnSheetUp {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 /* ===== Demo 动画 ===== */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateX(-50%) translateY(20px); }
