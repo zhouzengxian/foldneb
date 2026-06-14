@@ -101,6 +101,11 @@ html, body, #root {
   50% { opacity: 1; transform: scale(1.2); }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* 时间折叠：旋转 & 淡入 */
 @keyframes spin {
   from { transform: rotate(0deg); }
