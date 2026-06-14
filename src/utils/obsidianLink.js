@@ -101,4 +101,56 @@ function sanitizeFileName(name) {
   return name.replace(/[<>:"/\\|?*]/g, '-').trim();
 }
 
+/**
+ * 异步尝试打开 Obsidian，通过 visibilitychange 判定是否真的切换到了 Obsidian app。
+ * 用于在线 Demo 环境：评委若没装 Obsidian，1.5s 内不会发生页面隐藏 → 触发 fallback。
+ *
+ * @param {Object} agent
+ * @param {Object} handlers - { onSuccess(), onFallback() }
+ *   onSuccess: 检测到页面被隐藏（说明 Obsidian 真的打开了）
+ *   onFallback: 1.5s 内页面仍可见（说明没装 Obsidian 或被浏览器拦截）
+ */
+export function tryOpenObsidianWithFallback(agent, { onSuccess, onFallback } = {}) {
+  const uri = getObsidianUri(agent);
+  if (!uri) {
+    onFallback?.();
+    return;
+  }
+
+  let resolved = false;
+  const TIMEOUT_MS = 1500;
+
+  const cleanup = () => {
+    document.removeEventListener('visibilitychange', onVisChange);
+  };
+
+  const onVisChange = () => {
+    // 页面被隐藏 = 外部 app（Obsidian）成功接管
+    if (document.hidden && !resolved) {
+      resolved = true;
+      cleanup();
+      onSuccess?.();
+    }
+  };
+
+  document.addEventListener('visibilitychange', onVisChange);
+
+  // 触发协议跳转（用 location.href 更隐蔽，不会开空白窗口）
+  try {
+    window.location.href = uri;
+  } catch {
+    cleanup();
+    onFallback?.();
+    return;
+  }
+
+  // 超时未切换 → 判定 Obsidian 不存在
+  setTimeout(() => {
+    if (!resolved) {
+      cleanup();
+      onFallback?.();
+    }
+  }, TIMEOUT_MS);
+}
+
 export { DISTRICT_FOLDERS, VAULT_NAME };

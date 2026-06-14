@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import useNebulaStore from '../store/useNebulaStore.js';
 import { tier1Agents, districts, getAgentById } from '../data/gameData.js';
-import { openInObsidian } from '../utils/obsidianLink.js';
+import { tryOpenObsidianWithFallback } from '../utils/obsidianLink.js';
 import DialoguePanel from './DialoguePanel.jsx';
 import CloneCreator from './CloneCreator.jsx';
 import CustomCloneChat from './CustomCloneChat.jsx';
@@ -22,7 +22,8 @@ export default function NebulaUI() {
   const removeFriend = useNebulaStore((s) => s.removeFriend);
 
   const [searchResults, setSearchResults] = useState([]);
-  const [obsidianStatus, setObsidianStatus] = useState('');
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [obsidianHint, setObsidianHint] = useState(''); // 'trying' | 'success' | 'fallback'
   const [showDistrictPanel, setShowDistrictPanel] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
@@ -74,19 +75,33 @@ export default function NebulaUI() {
   const totalMemories = Object.keys(memories).length;
 
   /**
-   * Obsidian 跳转
+   * 打开网页档案 Modal（评委友好：保证有反馈，不依赖本地 Obsidian）
    */
-  const handleOpenObsidian = () => {
+  const handleOpenArchive = () => {
     if (!agent) return;
-    const result = openInObsidian(agent);
-    if (result === 'copied') {
-      setObsidianStatus('📋 已复制 Obsidian 链接到剪贴板');
-    } else if (result) {
-      setObsidianStatus('✅ 正在打开 Obsidian...');
-    } else {
-      setObsidianStatus('⚠️ 无法打开 Obsidian');
-    }
-    setTimeout(() => setObsidianStatus(''), 3000);
+    setObsidianHint('');
+    setArchiveModalOpen(true);
+  };
+
+  /**
+   * 在档案 Modal 内尝试 Obsidian 跳转（异步检测，失败降级提示）
+   */
+  const handleTryObsidian = () => {
+    if (!agent) return;
+    setObsidianHint('trying');
+    tryOpenObsidianWithFallback(agent, {
+      onSuccess: () => {
+        setObsidianHint('success');
+        setTimeout(() => setObsidianHint(''), 3000);
+      },
+      onFallback: () => {
+        setObsidianHint('fallback');
+        // 保留剪贴板兜底
+        try { navigator.clipboard.writeText(
+          `obsidian://open?vault=${encodeURIComponent('AI一人公司')}&file=${encodeURIComponent(agent.name)}`
+        ); } catch {}
+      },
+    });
   };
 
   return (
@@ -366,54 +381,18 @@ export default function NebulaUI() {
             </div>
           )}
 
-          {/* Obsidian 跳转按钮（自定义分身不显示） */}
+          {/* 查看完整档案按钮（自定义分身不显示） */}
           {selectedAgent !== 'custom_clone' && (
-            <>
-              <button onClick={handleOpenObsidian} style={{
-                width: '100%', padding: '7px', borderRadius: 8,
-                background: 'rgba(99,85,188,0.12)', border: '1px solid rgba(99,85,188,0.25)',
-                color: '#8866CC', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                marginBottom: 8,
-              }}>
-                📓 在 Obsidian 中打开档案
-              </button>
-              {obsidianStatus && (
-                <div style={{ fontSize: 10, color: '#FFD700', textAlign: 'center', marginBottom: 6 }}>{obsidianStatus}</div>
-              )}
-
-              {/* 知识库预览卡片 */}
-              <div style={{
-                marginBottom: 8, padding: '10px 12px',
-                background: 'rgba(99,85,188,0.06)', borderRadius: 10,
-                border: '1px solid rgba(99,85,188,0.12)',
-              }}>
-                <div style={{ fontSize: 10, color: '#8866CC', marginBottom: 6, letterSpacing: '0.05em' }}>
-                  📂 Obsidian 知识库预览
-                </div>
-                <div style={{ fontSize: 10, color: '#7788aa', lineHeight: 1.6 }}>
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
-                    <span style={{ color: '#6688aa', minWidth: 50 }}>路径</span>
-                    <span style={{ color: '#aabbcc' }}>
-                      AI一人公司/11-黑客松大赛/折叠星云agent数据库/{agent.tier === 2 ? '2_精英星团' : '1_智慧星河'}/{districts.find(d => d.id === agent.district)?.name || agent.district}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
-                    <span style={{ color: '#6688aa', minWidth: 50 }}>档案</span>
-                    <span style={{ color: '#aabbcc' }}>{agent.name}.md</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <span style={{ color: '#6688aa', minWidth: 50 }}>类型</span>
-                    <span style={{
-                      padding: '1px 6px', borderRadius: 4, fontSize: 9,
-                      background: agent.tier === 2 ? 'rgba(136,153,204,0.15)' : 'rgba(255,215,0,0.1)',
-                      color: agent.tier === 2 ? '#8899cc' : '#FFD700',
-                    }}>
-                      {agent.tier === 2 ? '精英星团' : '智慧星河'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </>
+            <button onClick={handleOpenArchive} style={{
+              width: '100%', padding: '8px', borderRadius: 8,
+              background: 'linear-gradient(135deg, rgba(99,85,188,0.18), rgba(99,85,188,0.08))',
+              border: '1px solid rgba(99,85,188,0.35)',
+              color: '#a890e0', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+              marginBottom: 8, fontWeight: 600, letterSpacing: '0.05em',
+              transition: 'all 0.2s',
+            }}>
+              📄 查看完整档案
+            </button>
           )}
 
           {/* 自定义分身：编辑入口 */}
@@ -466,6 +445,180 @@ export default function NebulaUI() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========== 网页档案 Modal（评委友好，不依赖本地 Obsidian） ========== */}
+      {archiveModalOpen && agent && (
+        <div
+          onClick={() => setArchiveModalOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'auto', padding: 20,
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+              background: 'linear-gradient(180deg, rgba(15,12,40,0.98), rgba(8,6,24,0.98))',
+              borderRadius: 18, border: `1px solid ${agent.color}33`,
+              boxShadow: `0 20px 80px rgba(0,0,0,0.6), 0 0 60px ${agent.color}15`,
+              padding: '24px 28px', color: '#e8f0ff', position: 'relative',
+              fontFamily: 'inherit',
+            }}
+          >
+            {/* 关闭按钮 */}
+            <button onClick={() => setArchiveModalOpen(false)} style={{
+              position: 'absolute', top: 14, right: 16,
+              background: 'none', border: 'none', color: '#8899bb',
+              cursor: 'pointer', fontSize: 22, padding: 2, lineHeight: 1,
+            }}>✕</button>
+
+            {/* 顶部说明条 */}
+            <div style={{
+              fontSize: 10, color: '#7788aa', letterSpacing: '0.1em',
+              marginBottom: 14, opacity: 0.7,
+            }}>
+              📄 思想者档案 · 在线预览 · 完整 Obsidian 联动需本地运行
+            </div>
+
+            {/* 头像 + 标题 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 18,
+                background: `radial-gradient(circle, ${agent.color}44, ${agent.color}11)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 32, border: `2px solid ${agent.color}66`, flexShrink: 0,
+                boxShadow: `0 0 24px ${agent.color}33`,
+              }}>{agent.emoji}</div>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{agent.name}</div>
+                <div style={{ fontSize: 13, color: agent.color, marginTop: 4 }}>{agent.title}</div>
+                <div style={{ fontSize: 11, color: '#7788aa', marginTop: 3 }}>
+                  {districts.find(d => d.id === agent.district)?.name || agent.district} · {agent.tier === 1 ? 'Tier-1 智慧星河' : `Tier-${agent.tier} 精英星团`}
+                </div>
+              </div>
+            </div>
+
+            {/* 简介 */}
+            {agent.description && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: '#FFD700', opacity: 0.6, marginBottom: 6, letterSpacing: '0.1em' }}>简介</div>
+                <p style={{ fontSize: 13, lineHeight: 1.8, color: '#bbccdd', margin: 0 }}>{agent.description}</p>
+              </div>
+            )}
+
+            {/* 经典语录 */}
+            {agent.dialogue && (
+              <div style={{
+                marginBottom: 16, padding: '14px 16px',
+                background: 'rgba(255,255,255,0.03)', borderRadius: 12,
+                borderLeft: `3px solid ${agent.color}66`,
+              }}>
+                <div style={{ fontSize: 10, color: '#FFD700', opacity: 0.6, marginBottom: 6, letterSpacing: '0.1em' }}>经典语录</div>
+                <div style={{ fontSize: 13, lineHeight: 1.85, color: '#d0dae8', fontStyle: 'italic' }}>
+                  "{agent.dialogue}"
+                </div>
+              </div>
+            )}
+
+            {/* 关键成就 */}
+            {agent.highlights && agent.highlights.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: '#FFD700', opacity: 0.6, marginBottom: 6, letterSpacing: '0.1em' }}>关键成就</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {agent.highlights.map((h, i) => (
+                    <span key={i} style={{
+                      fontSize: 11, padding: '4px 10px', borderRadius: 8,
+                      background: `${agent.color}18`, color: `${agent.color}dd`,
+                      border: `1px solid ${agent.color}33`,
+                    }}>{h}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 关联概念 */}
+            {agent.satellites && agent.satellites.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: '#FFD700', opacity: 0.6, marginBottom: 6, letterSpacing: '0.1em' }}>关联概念</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {agent.satellites.map((s, i) => (
+                    <span key={i} style={{
+                      fontSize: 11, padding: '4px 10px', borderRadius: 8,
+                      background: `${agent.color}12`, color: `${agent.color}bb`,
+                    }}>{s.label}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 标签 */}
+            {agent.tags && agent.tags.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {agent.tags.map((t, i) => (
+                    <span key={i} style={{
+                      fontSize: 10, padding: '3px 8px', borderRadius: 6,
+                      background: 'rgba(255,255,255,0.04)', color: '#8899aa',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                    }}>#{t}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 分隔 */}
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '6px 0 16px' }} />
+
+            {/* Obsidian 路径信息（精简版） */}
+            <div style={{
+              padding: '12px 14px', marginBottom: 14,
+              background: 'rgba(99,85,188,0.06)', borderRadius: 10,
+              border: '1px solid rgba(99,85,188,0.14)',
+              fontSize: 10, color: '#7788aa', lineHeight: 1.7,
+            }}>
+              <div style={{ color: '#8866CC', marginBottom: 6, letterSpacing: '0.05em', fontSize: 10 }}>📂 Obsidian 知识库路径</div>
+              <div style={{ color: '#99aabb', fontSize: 10, wordBreak: 'break-all' }}>
+                AI一人公司 / 11-黑客松大赛 / 折叠星云agent数据库 / {agent.tier === 2 ? '2_精英星团' : '1_智慧星河'} / {districts.find(d => d.id === agent.district)?.name || agent.district} / {agent.name}.md
+              </div>
+            </div>
+
+            {/* Obsidian 跳转按钮 + 状态提示 */}
+            <button onClick={handleTryObsidian} style={{
+              width: '100%', padding: '10px', borderRadius: 10,
+              background: obsidianHint === 'success'
+                ? 'linear-gradient(135deg, rgba(100,200,120,0.2), rgba(100,200,120,0.08))'
+                : 'linear-gradient(135deg, rgba(99,85,188,0.18), rgba(99,85,188,0.08))',
+              border: '1px solid ' + (obsidianHint === 'success' ? 'rgba(100,200,120,0.4)' : 'rgba(99,85,188,0.35)'),
+              color: obsidianHint === 'success' ? '#88ddaa' : '#a890e0',
+              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+              transition: 'all 0.2s',
+            }}>
+              {obsidianHint === 'trying' ? '⏳ 正在尝试打开 Obsidian...' :
+               obsidianHint === 'success' ? '✅ 已打开 Obsidian' :
+               obsidianHint === 'fallback' ? '📓 未检测到 Obsidian（在线环境正常）' :
+               '📓 在 Obsidian 中打开（本地用户）'}
+            </button>
+
+            {/* fallback 提示 */}
+            {obsidianHint === 'fallback' && (
+              <div style={{
+                marginTop: 10, padding: '10px 12px',
+                background: 'rgba(255,200,100,0.06)', borderRadius: 8,
+                border: '1px solid rgba(255,200,100,0.15)',
+                fontSize: 10.5, color: '#e8c890', lineHeight: 1.7,
+              }}>
+                💡 这是因为您当前是<b>在线 Demo 环境</b>，浏览器无法直接唤起本地 Obsidian。<br/>
+                完整体验：clone 仓库 → 本地运行 → 安装 Obsidian → 导入「AI一人公司」vault。<br/>
+                URI 已复制到剪贴板，可在本地浏览器地址栏粘贴试用。
+              </div>
+            )}
+          </div>
         </div>
       )}
 
