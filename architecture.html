@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FoldNeb 折叠星云 · 系统架构</title>
+<style>
+  * { margin:0; padding:0; box-sizing: border-box; }
+  body {
+    background: #0a0a1a;
+    color: #cfe8ff;
+    font-family: "Noto Serif SC", "PingFang SC", "Microsoft YaHei", serif;
+    display: flex; justify-content: center; align-items: center; min-height: 100vh;
+    padding: 40px 20px;
+  }
+  .arch {
+    max-width: 1100px; width: 100%;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .arch-title {
+    text-align: center; font-size: 28px; font-weight: 800;
+    color: #FFD700; letter-spacing: 0.12em;
+    text-shadow: 0 0 40px rgba(255,215,0,0.3);
+    margin-bottom: 4px;
+  }
+  .arch-subtitle {
+    text-align: center; font-size: 13px; color: rgba(200,210,230,0.45); margin-bottom: 12px;
+    letter-spacing: 0.2em;
+  }
+
+  /* Layer containers */
+  .layer {
+    border-radius: 14px; padding: 20px 24px;
+    position: relative;
+  }
+  .layer-label {
+    position: absolute; top: -12px; left: 20px;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    padding: 3px 14px; border-radius: 20px;
+  }
+
+  /* Layer 1: Entry */
+  .entry-layer {
+    border: 1px solid rgba(255,215,0,0.25);
+    background: linear-gradient(135deg, rgba(255,215,0,0.06) 0%, rgba(255,180,0,0.02) 100%);
+    display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+  }
+  .entry-layer .layer-label {
+    background: rgba(255,215,0,0.15); color: #FFD700;
+  }
+
+  /* Layer 2: UI */
+  .ui-layer {
+    border: 1px solid rgba(125,249,255,0.25);
+    background: linear-gradient(135deg, rgba(125,249,255,0.04) 0%, rgba(100,180,255,0.02) 100%);
+  }
+  .ui-layer .layer-label {
+    background: rgba(125,249,255,0.12); color: #7df9ff;
+  }
+  .ui-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 14px; margin-top: 4px;
+  }
+  .ui-col { display: flex; flex-direction: column; gap: 6px; }
+  .ui-col h4 {
+    font-size: 12px; color: rgba(125,249,255,0.6);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 2px;
+  }
+
+  /* Layer 3: State */
+  .state-layer {
+    border: 1px solid rgba(180,130,255,0.3);
+    background: linear-gradient(135deg, rgba(180,130,255,0.05) 0%, rgba(255,130,200,0.02) 100%);
+  }
+  .state-layer .layer-label {
+    background: rgba(180,130,255,0.14); color: #b482ff;
+  }
+
+  /* Layer 4: Engines */
+  .engine-layer {
+    border: 1px solid rgba(100,255,180,0.25);
+    background: linear-gradient(135deg, rgba(100,255,180,0.04) 0%, rgba(180,255,200,0.02) 100%);
+  }
+  .engine-layer .layer-label {
+    background: rgba(100,255,180,0.12); color: #64ffb4;
+  }
+
+  /* Layer 5: Data */
+  .data-layer {
+    border: 1px solid rgba(255,160,100,0.25);
+    background: linear-gradient(135deg, rgba(255,160,100,0.04) 0%, rgba(255,130,80,0.02) 100%);
+  }
+  .data-layer .layer-label {
+    background: rgba(255,160,100,0.12); color: #ffa064;
+  }
+
+  /* Components */
+  .comp {
+    font-size: 12.5px; padding: 7px 13px; border-radius: 8px;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .comp .icon { font-size: 15px; line-height: 1; }
+  .comp .name { font-weight: 600; }
+  .comp .desc { font-size: 11px; opacity: 0.55; margin-left: 2px; }
+
+  /* Entry comps */
+  .comp-entry {
+    background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.18);
+  }
+  .comp-entry:hover { background: rgba(255,215,0,0.14); }
+
+  /* 3D comps */
+  .comp-3d {
+    background: rgba(125,249,255,0.07); border: 1px solid rgba(125,249,255,0.15);
+  }
+  .comp-3d:hover { background: rgba(125,249,255,0.13); }
+
+  /* 2D comps */
+  .comp-2d {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .comp-2d:hover { background: rgba(255,255,255,0.08); }
+
+  /* Vis comps */
+  .comp-vis {
+    background: rgba(200,200,255,0.06); border: 1px solid rgba(200,200,255,0.14);
+  }
+  .comp-vis:hover { background: rgba(200,200,255,0.11); }
+
+  /* State comps */
+  .comp-state {
+    background: rgba(180,130,255,0.08); border: 1px solid rgba(180,130,255,0.18);
+  }
+  .comp-state:hover { background: rgba(180,130,255,0.14); }
+
+  /* Engine comps */
+  .comp-engine {
+    background: rgba(100,255,180,0.06); border: 1px solid rgba(100,255,180,0.16);
+  }
+  .comp-engine:hover { background: rgba(100,255,180,0.12); }
+
+  /* Data comps */
+  .comp-data {
+    background: rgba(255,160,100,0.06); border: 1px solid rgba(255,160,100,0.16);
+  }
+  .comp-data:hover { background: rgba(255,160,100,0.12); }
+
+  /* Row wraps */
+  .comp-row {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    align-items: flex-start;
+  }
+  .state-row {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  }
+  .data-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  }
+
+  /* Arrows between layers */
+  .arrow-down {
+    display: flex; justify-content: center; padding: 2px 0;
+  }
+  .arrow-down span {
+    font-size: 14px; color: rgba(255,255,255,0.18);
+  }
+
+  /* Thick line connectors */
+  .connector {
+    display: flex; align-items: center; gap: 20px;
+    flex-wrap: wrap;
+  }
+  .data-grid-3 {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+  }
+  .data-col {
+    background: rgba(255,255,255,0.03); border-radius: 10px;
+    padding: 12px 14px; border: 1px solid rgba(255,255,255,0.06);
+  }
+  .data-col h4 {
+    font-size: 11px; color: rgba(255,160,100,0.65);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  /* Version badge */
+  .version-tag {
+    text-align: center; margin-top: 4px;
+    font-size: 10px; color: rgba(255,255,255,0.2);
+    letter-spacing: 0.15em;
+  }
+
+  /* responsive */
+  @media (max-width: 768px) {
+    .ui-grid { grid-template-columns: 1fr; }
+    .data-grid-3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 500px) {
+    .data-grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="arch">
+
+  <div class="arch-title">FoldNeb 折叠星云</div>
+  <div class="arch-subtitle">—— 思想星河 · 系统架构 ——</div>
+
+  <!-- Layer 1: Entry -->
+  <div class="layer entry-layer">
+    <div class="layer-label">▸ 入口</div>
+    <div class="comp-row">
+      <div class="comp comp-entry"><span class="icon">🚀</span><span class="name">main.jsx</span></div>
+      <div class="comp comp-entry"><span class="icon">⚛️</span><span class="name">App.jsx</span><span class="desc">根组件 · 路由调度</span></div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- Layer 2: UI -->
+  <div class="layer ui-layer">
+    <div class="layer-label">▸ 表现层</div>
+    <div class="ui-grid">
+
+      <!-- 3D Scene -->
+      <div class="ui-col">
+        <h4>🌌 3D 星河 · Three.js</h4>
+        <div class="comp-row">
+          <div class="comp comp-3d"><span class="icon">🎬</span><span class="name">NebulaScene</span><span class="desc">场景容器</span></div>
+          <div class="comp comp-3d"><span class="icon">⭐</span><span class="name">AgentNode</span><span class="desc">思想星体</span></div>
+          <div class="comp comp-3d"><span class="icon">🪐</span><span class="name">CustomCloneNode</span><span class="desc">用户分身·金</span></div>
+          <div class="comp comp-3d"><span class="icon">🔗</span><span class="name">ConnectionLines</span><span class="desc">归属/关系线</span></div>
+          <div class="comp comp-3d"><span class="icon">🌱</span><span class="name">GrowingLines</span><span class="desc">生长藤蔓</span></div>
+          <div class="comp comp-3d"><span class="icon">🌠</span><span class="name">Starfield</span><span class="desc">星空背景</span></div>
+          <div class="comp comp-3d"><span class="icon">✨</span><span class="name">SparkleField</span><span class="desc">粒子光点</span></div>
+          <div class="comp comp-3d"><span class="icon">🌀</span><span class="name">InfluenceNebula</span><span class="desc">影响力星云</span></div>
+          <div class="comp comp-3d"><span class="icon">🏠</span><span class="name">DistrictGround</span><span class="desc">分区地面</span></div>
+        </div>
+        <h4 style="margin-top:10px;">📊 可视化子图</h4>
+        <div class="comp-row">
+          <div class="comp comp-vis"><span class="icon">🧠</span><span class="name">DeliberationGraph</span><span class="desc">推演力图</span></div>
+          <div class="comp comp-vis"><span class="icon">📖</span><span class="name">MemoryGraph</span><span class="desc">记忆图谱</span></div>
+          <div class="comp comp-vis"><span class="icon">⏳</span><span class="name">TimelineGraph</span><span class="desc">时间线</span></div>
+        </div>
+      </div>
+
+      <!-- 2D Panels -->
+      <div class="ui-col">
+        <h4>🖥️ 2D 面板 · React</h4>
+        <div class="comp-row">
+          <div class="comp comp-2d"><span class="icon">🎛️</span><span class="name">NebulaUI</span><span class="desc">主界面管控</span></div>
+          <div class="comp comp-2d"><span class="icon">📱</span><span class="name">PhoneApp</span><span class="desc">朋友圈社交</span></div>
+          <div class="comp comp-2d"><span class="icon">⚖️</span><span class="name">DeliberationUI</span><span class="desc">决策推演</span></div>
+          <div class="comp comp-2d"><span class="icon">⏰</span><span class="name">TemporalDeliberation</span><span class="desc">时间折叠</span></div>
+          <div class="comp comp-2d"><span class="icon">👤</span><span class="name">CloneCreator</span><span class="desc">分身创建</span></div>
+          <div class="comp comp-2d"><span class="icon">💬</span><span class="name">CustomCloneChat</span><span class="desc">分身聊天</span></div>
+          <div class="comp comp-2d"><span class="icon">🗣️</span><span class="name">DialoguePanel</span><span class="desc">AI 对话</span></div>
+          <div class="comp comp-2d"><span class="icon">🔍</span><span class="name">AgentDetail</span><span class="desc">思想家详情</span></div>
+          <div class="comp comp-2d"><span class="icon">⚙️</span><span class="name">ApiSettingsPanel</span><span class="desc">模型配置</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- Layer 3: State -->
+  <div class="layer state-layer">
+    <div class="layer-label">▸ 状态层</div>
+    <div class="state-row">
+      <div class="comp comp-state" style="flex:1;min-width:260px;">
+        <span class="icon">🐻</span>
+        <span class="name">Zustand Store</span>
+        <span class="desc">useNebulaStore — 全局状态：agents / friends / memories / customClone / ui 状态 / 对话历史</span>
+      </div>
+      <div class="comp comp-state">
+        <span class="icon">🪝</span>
+        <span class="name">useForceGraph</span>
+        <span class="desc">力导向布局 Hook</span>
+      </div>
+      <div class="comp comp-state">
+        <span class="icon">💾</span>
+        <span class="name">localStorage</span>
+        <span class="desc">持久化 + 自愈清理</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- Layer 4: Engine -->
+  <div class="layer engine-layer">
+    <div class="layer-label">▸ 引擎层</div>
+    <div class="comp-row">
+      <div class="comp comp-engine"><span class="icon">🧬</span><span class="name">deliberationEngine</span><span class="desc">多视角决策推演</span></div>
+      <div class="comp comp-engine"><span class="icon">⏱️</span><span class="name">temporalEngine</span><span class="desc">时间折叠·过去未来自我</span></div>
+      <div class="comp comp-engine"><span class="icon">🔀</span><span class="name">forkEngine</span><span class="desc">决策分叉对比量化</span></div>
+      <div class="comp comp-engine"><span class="icon">🔎</span><span class="name">causalTrace</span><span class="desc">因果回溯追溯</span></div>
+      <div class="comp comp-engine"><span class="icon">💎</span><span class="name">memoryCrystal</span><span class="desc">记忆结晶管理</span></div>
+      <div class="comp comp-engine"><span class="icon">🤖</span><span class="name">agentReplyEngine</span><span class="desc">统一回复·三级降级</span></div>
+      <div class="comp comp-engine"><span class="icon">📚</span><span class="name">imaClient</span><span class="desc">腾讯 ima 知识库</span></div>
+      <div class="comp comp-engine"><span class="icon">🎛️</span><span class="name">modelConfig</span><span class="desc">多模型切换调度</span></div>
+      <div class="comp comp-engine"><span class="icon">🔊</span><span class="name">audio</span><span class="desc">语音播放</span></div>
+      <div class="comp comp-engine"><span class="icon">📄</span><span class="name">reportImage</span><span class="desc">报告截图生成</span></div>
+      <div class="comp comp-engine"><span class="icon">🔗</span><span class="name">obsidianLink</span><span class="desc">Obsidian 联动</span></div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- Layer 5: Data -->
+  <div class="layer data-layer">
+    <div class="layer-label">▸ 数据层</div>
+    <div class="data-grid-3">
+      <div class="data-col">
+        <h4>👤 用户数据</h4>
+        <div class="comp-row">
+          <div class="comp comp-data"><span class="icon">👥</span><span class="name">friends</span><span class="desc">关注列表</span></div>
+          <div class="comp comp-data"><span class="icon">🧬</span><span class="name">customClone</span><span class="desc">用户分身</span></div>
+          <div class="comp comp-data"><span class="icon">💬</span><span class="name">conversations</span><span class="desc">对话历史</span></div>
+          <div class="comp comp-data"><span class="icon">⚖️</span><span class="name">deliberations</span><span class="desc">决策记录</span></div>
+        </div>
+      </div>
+      <div class="data-col">
+        <h4>📦 静态预设</h4>
+        <div class="comp-row">
+          <div class="comp comp-data"><span class="icon">👨‍🎨</span><span class="name">gameData.js</span><span class="desc">125 位思想者</span></div>
+          <div class="comp comp-data"><span class="icon">📰</span><span class="name">agentMoments.js</span><span class="desc">朋友圈数据</span></div>
+          <div class="comp comp-data"><span class="icon">🎭</span><span class="name">deliberationDemos</span><span class="desc">推演场景模板</span></div>
+        </div>
+      </div>
+      <div class="data-col">
+        <h4>☁️ 外部服务</h4>
+        <div class="comp-row">
+          <div class="comp comp-data"><span class="icon">🧠</span><span class="name">LLM APIs</span><span class="desc">GLM / DeepSeek / MiMo…</span></div>
+          <div class="comp comp-data"><span class="icon">📚</span><span class="name">腾讯 ima</span><span class="desc">知识库 RAG</span></div>
+          <div class="comp comp-data"><span class="icon">📖</span><span class="name">Obsidian Vault</span><span class="desc">笔记联动</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="version-tag">FoldNeb Architecture · V4.0</div>
+
+</div>
+</body>
+</html>
