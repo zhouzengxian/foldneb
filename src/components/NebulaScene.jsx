@@ -408,8 +408,8 @@ function CameraController({ getPos }) {
       enableRotate={true}
       autoRotate={true}
       autoRotateSpeed={0.15}
-      minDistance={4}
-      maxDistance={80}
+      minDistance={2}
+      maxDistance={120}
       maxPolarAngle={Math.PI * 0.85}
       dampingFactor={0.08}
     />

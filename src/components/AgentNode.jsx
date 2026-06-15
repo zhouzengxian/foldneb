@@ -77,6 +77,7 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
   // 拖拽状态
   const draggingRef = useRef(false);
   const dragStartRef = useRef([0, 0]);
+  const dragTimeoutRef = useRef(null);
   const { camera } = useThree();
   const setDraggingNode = useNebulaStore((s) => s.setDraggingNode);
   // 相机面向平面：拖拽时随节点位置重建，体感像 2D 平面拖拽
@@ -154,13 +155,21 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
       dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), nodePos);
       // 同步 store → CameraController 禁用 OrbitControls
       setDraggingNode(agent.id);
+      // 安全兜底：移动端 pointerup 可能丢失，3s 后强制释放
+      clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = setTimeout(() => {
+        if (useNebulaStore.getState().draggingNode === agent.id) {
+          setDraggingNode(null);
+        }
+      }, 3000);
     }
   };
 
   // 全局 move/up：用 useEffect 注册到 window，确保指针移出节点后仍能继续
   useEffect(() => {
     const onMove = (e) => {
-      if (!forceGraph || !forceGraph.isDragging()) return;
+      // 只响应自己发起的拖拽（防止多 agent 全局监听器竞态）
+      if (!forceGraph || !forceGraph.isDragging() || useNebulaStore.getState().draggingNode !== agent.id) return;
       // 判断是否真的开始拖拽（位移超过阈值）
       const dx = e.clientX - dragStartRef.current[0];
       const dy = e.clientY - dragStartRef.current[1];
@@ -178,8 +187,10 @@ export default function AgentNode({ agent, getPhysPos, isSelected, isHovered, is
     };
 
     const onUp = () => {
-      if (!forceGraph || !forceGraph.isDragging()) return;
+      // 只响应自己发起的拖拽（防止多 agent 全局监听器竞态）
+      if (!forceGraph || !forceGraph.isDragging() || useNebulaStore.getState().draggingNode !== agent.id) return;
       forceGraph.endDrag();
+      clearTimeout(dragTimeoutRef.current);
       setDraggingNode(null);
       // 未发生位移 → 视为点击（选中 agent）
       if (!draggingRef.current) {

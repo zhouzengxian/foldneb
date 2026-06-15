@@ -1,6 +1,6 @@
 # Changelog · FoldNeb 折叠星云
 
-## V4.11 — 📱 手机端全面调优 (2026-06-15)
+## V4.11 — 📱 手机端适配调整 (2026-06-15)
 
 ### 🛡️ 防缩放/防回弹
 - `index.html` viewport 加 `maximum-scale=1.0, user-scalable=no` + 防缓存 meta
